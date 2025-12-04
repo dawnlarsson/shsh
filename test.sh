@@ -833,7 +833,257 @@ end
 map_get rapid "c"; assert_eq "rapid map c" "$R" "3"
 
 echo ""
-echo "=== Cleanup ==="
+echo "=== Defaults ==="
+
+# default on empty
+empty_default=""
+default empty_default "fallback"
+assert_eq "default on empty" "$empty_default" "fallback"
+
+# default on unset
+unset unset_default 2>/dev/null
+default unset_default "fallback2"
+assert_eq "default on unset" "$unset_default" "fallback2"
+
+# default preserves existing
+existing_default="original"
+default existing_default "ignored"
+assert_eq "default preserves existing" "$existing_default" "original"
+
+# default with zero (0 is not empty)
+zero_default=0
+default zero_default "replaced"
+assert_eq "default zero preserved" "$zero_default" "0"
+
+# default with spaces
+space_default="has spaces"
+default space_default "nope"
+assert_eq "default with spaces" "$space_default" "has spaces"
+
+# default_unset on empty (should NOT replace)
+empty_for_unset=""
+default_unset empty_for_unset "should_not_apply"
+assert_eq "default_unset ignores empty" "$empty_for_unset" ""
+
+# default_unset on truly unset
+unset truly_unset 2>/dev/null
+default_unset truly_unset "applied"
+assert_eq "default_unset on unset" "$truly_unset" "applied"
+
+# default_unset preserves existing
+existing_unset="keep"
+default_unset existing_unset "nope"
+assert_eq "default_unset preserves existing" "$existing_unset" "keep"
+
+# chained defaults
+unset chain_var 2>/dev/null
+default chain_var ""
+default chain_var "second"
+assert_eq "chained default" "$chain_var" "second"
+
+# default with special chars in value
+unset special_def 2>/dev/null
+default special_def "hello world"
+assert_eq "default special chars" "$special_def" "hello world"
+
+# default invalid name rejected
+bad_def_result=$(default "bad-name" "val" 2>&1)
+ret=$?
+if $ret != 0
+  pass "default rejects invalid name"
+else
+  fail "default accepted invalid name"
+end
+
+echo ""
+echo "=== Arithmetic Operators ==="
+
+# increment
+inc_var=5
+inc_var++
+assert_eq "var++" "$inc_var" "6"
+
+# decrement
+dec_var=10
+dec_var--
+assert_eq "var--" "$dec_var" "9"
+
+# increment from zero
+zero_inc=0
+zero_inc++
+assert_eq "0++" "$zero_inc" "1"
+
+# decrement to negative
+neg_dec=0
+neg_dec--
+assert_eq "0--" "$neg_dec" "-1"
+
+# += basic
+add_var=10
+add_var += 5
+assert_eq "var += 5" "$add_var" "15"
+
+# -= basic
+sub_var=20
+sub_var -= 8
+assert_eq "var -= 8" "$sub_var" "12"
+
+# *= basic
+mul_var=7
+mul_var *= 6
+assert_eq "var *= 6" "$mul_var" "42"
+
+# /= basic
+div_var=100
+div_var /= 4
+assert_eq "var /= 4" "$div_var" "25"
+
+# %= basic
+mod_var=17
+mod_var %= 5
+assert_eq "var %= 5" "$mod_var" "2"
+
+# += with zero
+zero_add=42
+zero_add += 0
+assert_eq "var += 0" "$zero_add" "42"
+
+# *= with zero
+zero_mul=999
+zero_mul *= 0
+assert_eq "var *= 0" "$zero_mul" "0"
+
+# *= with one (identity)
+one_mul=123
+one_mul *= 1
+assert_eq "var *= 1" "$one_mul" "123"
+
+# /= by one
+one_div=456
+one_div /= 1
+assert_eq "var /= 1" "$one_div" "456"
+
+# negative arithmetic
+neg_arith=-10
+neg_arith += 3
+assert_eq "negative += 3" "$neg_arith" "-7"
+
+neg_arith2=5
+neg_arith2 += -10
+assert_eq "var += negative" "$neg_arith2" "-5"
+
+# chained operations
+chain_arith=10
+chain_arith += 5
+chain_arith *= 2
+chain_arith -= 10
+assert_eq "chained arithmetic" "$chain_arith" "20"
+
+# increment in loop
+loop_inc=0
+iter=0
+while $iter < 5
+  loop_inc++
+  iter++
+done
+assert_eq "++ in loop" "$loop_inc" "5"
+
+# += in loop (sum 1..10)
+sum=0
+i=1
+while $i <= 10
+  sum += $i
+  i++
+done
+assert_eq "+= loop sum" "$sum" "55"
+
+# factorial with *=
+fact=1
+n=5
+while $n > 1
+  fact *= $n
+  n--
+done
+assert_eq "*= factorial" "$fact" "120"
+
+# %= in loop (find pattern)
+mod_results=""
+j=0
+while $j < 10
+  tmp=$j
+  tmp %= 3
+  if $tmp == 0
+    mod_results="${mod_results}$j "
+  end
+  j++
+done
+assert_eq "%= pattern" "$mod_results" "0 3 6 9 "
+
+# large increment
+big_inc=999999
+big_inc++
+assert_eq "large ++" "$big_inc" "1000000"
+
+# arithmetic with expressions
+expr_var=10
+expr_var += $((2 * 3))
+assert_eq "+= with expr" "$expr_var" "16"
+
+# multiple increments same line (each on own line though)
+multi_a=0
+multi_b=0
+multi_a++
+multi_b++
+multi_a++
+assert_eq "multiple inc a" "$multi_a" "2"
+assert_eq "multiple inc b" "$multi_b" "1"
+
+# indented arithmetic (in if block)
+indent_var=5
+if 1 == 1
+  indent_var++
+  indent_var += 10
+end
+assert_eq "indented arithmetic" "$indent_var" "16"
+
+# deeply nested arithmetic
+nested_arith=0
+if 1 == 1
+  if 1 == 1
+    if 1 == 1
+      nested_arith++
+      nested_arith *= 10
+      nested_arith += 5
+    end
+  end
+end
+assert_eq "deeply nested arithmetic" "$nested_arith" "15"
+
+# arithmetic in function
+arith_func() {
+  _af_val=$1
+  _af_val++
+  _af_val *= 2
+  R=$_af_val
+}
+arith_func 5
+assert_eq "arithmetic in function" "$R" "12"
+
+# division truncation (integer division)
+trunc_div=7
+trunc_div /= 2
+assert_eq "integer division truncates" "$trunc_div" "3"
+
+# modulo edge cases
+mod_zero=5
+mod_zero %= 5
+assert_eq "x %= x equals 0" "$mod_zero" "0"
+
+mod_larger=3
+mod_larger %= 10
+assert_eq "x %= larger" "$mod_larger" "3"
+
+echo ""
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
 
 echo ""

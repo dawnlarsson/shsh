@@ -1,5 +1,5 @@
 #!/bin/sh
-VERSION="0.12.0"
+VERSION="0.13.0"
 
 TOOLKIT='
 _shsh_sq=$(printf "\\047")
@@ -21,6 +21,16 @@ _shsh_check_int() {
       return 1
       ;;
   esac
+}
+
+default() {
+  _shsh_check_name "$1" || return 1
+  eval "[ -z \"\${$1}\" ] && $1=\"\$2\""
+}
+
+default_unset() {
+  _shsh_check_name "$1" || return 1
+  eval "[ -z \"\${$1+x}\" ] && $1=\"\$2\""
 }
 
 array_set() {
@@ -488,6 +498,70 @@ transform_line() {
         printf '%s\n' "${_tl_indent}fi"
         _t_if_depth=$((_t_if_depth - 1))
       fi
+      ;;
+    *++) 
+      _tl_var="${_tl_stripped%++}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *) printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} + 1))" ;;
+      esac
+      ;;
+    *--)
+      _tl_var="${_tl_stripped%--}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *) printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} - 1))" ;;
+      esac
+      ;;
+    *" += "*)
+      _tl_var="${_tl_stripped%% +=*}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *)
+          _tl_val="${_tl_stripped#*+= }"
+          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} + ${_tl_val}))"
+          ;;
+      esac
+      ;;
+    *" -= "*)
+      _tl_var="${_tl_stripped%% -=*}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *)
+          _tl_val="${_tl_stripped#*-= }"
+          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} - ${_tl_val}))"
+          ;;
+      esac
+      ;;
+    *" *= "*)
+      _tl_var="${_tl_stripped%% \*=*}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *)
+          _tl_val="${_tl_stripped#**= }"
+          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} * ${_tl_val}))"
+          ;;
+      esac
+      ;;
+    *" /= "*)
+      _tl_var="${_tl_stripped%% /=*}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *)
+          _tl_val="${_tl_stripped#*/= }"
+          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} / ${_tl_val}))"
+          ;;
+      esac
+      ;;
+    *" %= "*)
+      _tl_var="${_tl_stripped%% %=*}"
+      case "$_tl_var" in
+        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
+        *)
+          _tl_val="${_tl_stripped#*%= }"
+          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} % ${_tl_val}))"
+          ;;
+      esac
       ;;
     *) printf '%s\n' "$_tl_line" ;;
   esac
