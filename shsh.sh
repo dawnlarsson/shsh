@@ -1,5 +1,5 @@
 #!/bin/sh
-VERSION="0.11.0"
+VERSION="0.12.0"
 
 TOOLKIT='
 _shsh_sq=$(printf "\\047")
@@ -72,11 +72,27 @@ array_clear() {
   eval "__shsh_${1}_n=0"
 }
 
-array_delete() {
+array_unset() {
   _shsh_check_name "$1" || return 1
   _shsh_check_int "$2" || return 1
   eval "unset __shsh_${1}_$2"
 }
+
+array_remove() {
+  _shsh_check_name "$1" || return 1
+  _shsh_check_int "$2" || return 1
+  eval "_ar_len=\"\${__shsh_${1}_n:-0}\""
+  [ "$2" -ge "$_ar_len" ] && return 1
+  _ar_i=$2
+  while [ "$((_ar_i + 1))" -lt "$_ar_len" ]; do
+    eval "__shsh_${1}_$_ar_i=\"\${__shsh_${1}_$((_ar_i + 1))}\""
+    _ar_i=$((_ar_i + 1))
+  done
+  eval "unset __shsh_${1}_$((_ar_len - 1))"
+  eval "__shsh_${1}_n=$((_ar_len - 1))"
+}
+
+array_delete() { array_remove "$@"; }
 
 map_set() {
   _shsh_check_name "$1" || return 1
