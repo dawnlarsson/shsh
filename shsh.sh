@@ -23,6 +23,56 @@ _shsh_check_int() {
   esac
 }
 
+str_starts() {
+  case "$1" in "$2"*) return 0 ;; *) return 1 ;; esac
+}
+
+str_ends() {
+  case "$1" in *"$2") return 0 ;; *) return 1 ;; esac
+}
+
+str_after() {
+  R="${1#*"$2"}"
+  [ "$R" != "$1" ]
+}
+
+str_before() {
+  R="${1%%"$2"*}"
+  [ "$R" != "$1" ]
+}
+
+str_after_last() {
+  R="${1##*"$2"}"
+  [ "$R" != "$1" ]
+}
+
+str_before_last() {
+  R="${1%"$2"*}"
+  [ "$R" != "$1" ]
+}
+
+str_ltrim() {
+  R="${1#"${1%%[![:space:]]*}"}"
+}
+
+str_rtrim() {
+  R="${1%"${1##*[![:space:]]}"}"
+}
+
+str_trim() {
+  str_ltrim "$1"
+  str_rtrim "$R"
+}
+
+str_indent() {
+  _si_tmp="${1#"${1%%[![:space:]]*}"}"
+  R="${1%"$_si_tmp"}"
+}
+
+str_contains() {
+  case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac
+}
+
 default() {
   _shsh_check_name "$1" || return 1
   eval "[ -z \"\${$1}\" ] && $1=\"\$2\""

@@ -1546,6 +1546,550 @@ map_set clear_map fresh "new"
 map_keys clear_map clear_keys2
 array_len clear_keys2; assert_eq "map_clear re-add" "$R" "1"
 
+echo ""
+echo "=== String Functions ==="
+
+if str_starts "hello world" "hello"
+  pass "str_starts basic match"
+else
+  fail "str_starts basic match"
+end
+
+if str_starts "hello world" "world"
+  fail "str_starts false positive"
+else
+  pass "str_starts no false positive"
+end
+
+if str_starts "hello" "hello"
+  pass "str_starts exact match"
+else
+  fail "str_starts exact match"
+end
+
+if str_starts "hello" ""
+  pass "str_starts empty prefix"
+else
+  fail "str_starts empty prefix"
+end
+
+if str_starts "" ""
+  pass "str_starts empty string empty prefix"
+else
+  fail "str_starts empty string empty prefix"
+end
+
+if str_starts "" "x"
+  fail "str_starts empty string non-empty prefix"
+else
+  pass "str_starts empty string non-empty prefix"
+end
+
+if str_starts "hello" "hello world"
+  fail "str_starts prefix longer than string"
+else
+  pass "str_starts prefix longer than string"
+end
+
+if str_starts "  spaces" "  "
+  pass "str_starts with spaces"
+else
+  fail "str_starts with spaces"
+end
+
+if str_starts "path/to/file" "path/"
+  pass "str_starts with slash"
+else
+  fail "str_starts with slash"
+end
+
+if str_starts "***glob" "***"
+  pass "str_starts with glob chars"
+else
+  fail "str_starts with glob chars"
+end
+
+if str_ends "hello world" "world"
+  pass "str_ends basic match"
+else
+  fail "str_ends basic match"
+end
+
+if str_ends "hello world" "hello"
+  fail "str_ends false positive"
+else
+  pass "str_ends no false positive"
+end
+
+if str_ends "hello" "hello"
+  pass "str_ends exact match"
+else
+  fail "str_ends exact match"
+end
+
+if str_ends "hello" ""
+  pass "str_ends empty suffix"
+else
+  fail "str_ends empty suffix"
+end
+
+if str_ends "" ""
+  pass "str_ends empty string empty suffix"
+else
+  fail "str_ends empty string empty suffix"
+end
+
+if str_ends "" "x"
+  fail "str_ends empty string non-empty suffix"
+else
+  pass "str_ends empty string non-empty suffix"
+end
+
+if str_ends "hello" "hello world"
+  fail "str_ends suffix longer than string"
+else
+  pass "str_ends suffix longer than string"
+end
+
+if str_ends "file.txt" ".txt"
+  pass "str_ends with extension"
+else
+  fail "str_ends with extension"
+end
+
+if str_ends "trailing  " "  "
+  pass "str_ends with spaces"
+else
+  fail "str_ends with spaces"
+end
+
+if str_ends "end***" "***"
+  pass "str_ends with glob chars"
+else
+  fail "str_ends with glob chars"
+end
+
+if str_contains "hello world" "o w"
+  pass "str_contains middle"
+else
+  fail "str_contains middle"
+end
+
+if str_contains "hello world" "hello"
+  pass "str_contains start"
+else
+  fail "str_contains start"
+end
+
+if str_contains "hello world" "world"
+  pass "str_contains end"
+else
+  fail "str_contains end"
+end
+
+if str_contains "hello world" "xyz"
+  fail "str_contains false positive"
+else
+  pass "str_contains no false positive"
+end
+
+if str_contains "hello" "hello"
+  pass "str_contains exact match"
+else
+  fail "str_contains exact match"
+end
+
+if str_contains "hello" ""
+  pass "str_contains empty needle"
+else
+  fail "str_contains empty needle"
+end
+
+if str_contains "" ""
+  pass "str_contains empty both"
+else
+  fail "str_contains empty both"
+end
+
+if str_contains "" "x"
+  fail "str_contains empty haystack"
+else
+  pass "str_contains empty haystack"
+end
+
+if str_contains "abc*def" "*"
+  pass "str_contains asterisk"
+else
+  fail "str_contains asterisk"
+end
+
+if str_contains "a?b" "?"
+  pass "str_contains question mark"
+else
+  fail "str_contains question mark"
+end
+
+if str_contains "[test]" "["
+  pass "str_contains bracket"
+else
+  fail "str_contains bracket"
+end
+
+str_after "path/to/file" "/"
+assert_eq "str_after first slash" "$R" "to/file"
+
+str_after "key=value" "="
+assert_eq "str_after equals" "$R" "value"
+
+str_after "hello" "x"
+ret=$?
+if $ret != 0
+  pass "str_after returns false on no match"
+else
+  fail "str_after returns false on no match"
+end
+
+str_after "aaa" "a"
+assert_eq "str_after first occurrence" "$R" "aa"
+
+str_after "hello world" " "
+assert_eq "str_after space" "$R" "world"
+
+str_after "::value" ":"
+assert_eq "str_after leading delimiter" "$R" ":value"
+
+str_after "value::" ":"
+assert_eq "str_after trailing delimiter" "$R" ":"
+
+str_after "no-delim" "="
+ret=$?
+if $ret != 0
+  pass "str_after no match returns false"
+else
+  fail "str_after no match should return false"
+end
+assert_eq "str_after no match sets R to original" "$R" "no-delim"
+
+str_after "a::b" "::"
+assert_eq "str_after multi-char delimiter" "$R" "b"
+
+str_after "" "x"
+ret=$?
+if $ret != 0
+  pass "str_after empty string"
+else
+  fail "str_after empty string should fail"
+end
+
+str_before "path/to/file" "/"
+assert_eq "str_before first slash" "$R" "path"
+
+str_before "key=value=extra" "="
+assert_eq "str_before equals (first only)" "$R" "key"
+
+str_before "hello" "x"
+ret=$?
+if $ret != 0
+  pass "str_before returns false on no match"
+else
+  fail "str_before returns false on no match"
+end
+
+str_before "hello world" " "
+assert_eq "str_before space" "$R" "hello"
+
+str_before "::value" ":"
+assert_eq "str_before leading delimiter" "$R" ""
+
+str_before "value::" ":"
+assert_eq "str_before trailing delimiter" "$R" "value"
+
+str_before "a::b" "::"
+assert_eq "str_before multi-char delimiter" "$R" "a"
+
+str_before "" "x"
+ret=$?
+if $ret != 0
+  pass "str_before empty string"
+else
+  fail "str_before empty string should fail"
+end
+
+str_after_last "path/to/file" "/"
+assert_eq "str_after_last slash" "$R" "file"
+
+str_after_last "a.b.c.txt" "."
+assert_eq "str_after_last dot extension" "$R" "txt"
+
+str_after_last "hello" "x"
+ret=$?
+if $ret != 0
+  pass "str_after_last returns false on no match"
+else
+  fail "str_after_last returns false on no match"
+end
+
+str_after_last "single" "/"
+ret=$?
+if $ret != 0
+  pass "str_after_last no delimiter"
+else
+  fail "str_after_last no delimiter should fail"
+end
+
+str_after_last "a::b::c" "::"
+assert_eq "str_after_last multi-char" "$R" "c"
+
+str_after_last "trailing/" "/"
+assert_eq "str_after_last trailing delimiter" "$R" ""
+
+str_after_last "/leading" "/"
+assert_eq "str_after_last leading delimiter" "$R" "leading"
+
+str_after_last "aaa" "a"
+assert_eq "str_after_last repeated" "$R" ""
+
+str_before_last "path/to/file" "/"
+assert_eq "str_before_last slash" "$R" "path/to"
+
+str_before_last "a.b.c.txt" "."
+assert_eq "str_before_last dot" "$R" "a.b.c"
+
+str_before_last "hello" "x"
+ret=$?
+if $ret != 0
+  pass "str_before_last returns false on no match"
+else
+  fail "str_before_last returns false on no match"
+end
+
+str_before_last "single" "/"
+ret=$?
+if $ret != 0
+  pass "str_before_last no delimiter"
+else
+  fail "str_before_last no delimiter should fail"
+end
+
+str_before_last "a::b::c" "::"
+assert_eq "str_before_last multi-char" "$R" "a::b"
+
+str_before_last "trailing/" "/"
+assert_eq "str_before_last trailing delimiter" "$R" "trailing"
+
+str_before_last "/leading" "/"
+assert_eq "str_before_last leading delimiter" "$R" ""
+
+str_before_last "aaa" "a"
+assert_eq "str_before_last repeated" "$R" "aa"
+
+str_ltrim "  hello"
+assert_eq "str_ltrim basic" "$R" "hello"
+
+str_ltrim "		tab"
+assert_eq "str_ltrim tabs" "$R" "tab"
+
+str_ltrim "  	 mixed  "
+assert_eq "str_ltrim mixed ws preserves trailing" "$R" "mixed  "
+
+str_ltrim "nowhitespace"
+assert_eq "str_ltrim no leading ws" "$R" "nowhitespace"
+
+str_ltrim ""
+assert_eq "str_ltrim empty" "$R" ""
+
+str_ltrim "   "
+assert_eq "str_ltrim all whitespace" "$R" ""
+
+str_ltrim "  hello world  "
+assert_eq "str_ltrim preserves middle and trailing" "$R" "hello world  "
+
+nl_str="
+line"
+str_ltrim "$nl_str"
+assert_eq "str_ltrim newline" "$R" "line"
+
+str_rtrim "hello  "
+assert_eq "str_rtrim basic" "$R" "hello"
+
+str_rtrim "tab		"
+assert_eq "str_rtrim tabs" "$R" "tab"
+
+str_rtrim "  mixed  	 "
+assert_eq "str_rtrim mixed ws preserves leading" "$R" "  mixed"
+
+str_rtrim "nowhitespace"
+assert_eq "str_rtrim no trailing ws" "$R" "nowhitespace"
+
+str_rtrim ""
+assert_eq "str_rtrim empty" "$R" ""
+
+str_rtrim "   "
+assert_eq "str_rtrim all whitespace" "$R" ""
+
+str_rtrim "  hello world  "
+assert_eq "str_rtrim preserves middle and leading" "$R" "  hello world"
+
+nl_str2="line
+"
+str_rtrim "$nl_str2"
+assert_eq "str_rtrim newline" "$R" "line"
+
+str_trim "  hello  "
+assert_eq "str_trim basic" "$R" "hello"
+
+str_trim "		tabs		"
+assert_eq "str_trim tabs" "$R" "tabs"
+
+str_trim "  	 mixed  	 "
+assert_eq "str_trim mixed" "$R" "mixed"
+
+str_trim "nowhitespace"
+assert_eq "str_trim no whitespace" "$R" "nowhitespace"
+
+str_trim ""
+assert_eq "str_trim empty" "$R" ""
+
+str_trim "   "
+assert_eq "str_trim all whitespace" "$R" ""
+
+str_trim "  hello world  "
+assert_eq "str_trim preserves middle" "$R" "hello world"
+
+str_trim "  multi
+line  "
+assert_eq "str_trim multiline" "$R" "multi
+line"
+
+str_indent "hello"
+assert_eq "str_indent no indent" "$R" ""
+
+str_indent "  two spaces"
+assert_eq "str_indent two spaces" "$R" "  "
+
+str_indent "    four spaces"
+assert_eq "str_indent four spaces" "$R" "    "
+
+str_indent "	one tab"
+assert_eq "str_indent tab" "$R" "	"
+
+str_indent "		two tabs"
+assert_eq "str_indent two tabs" "$R" "		"
+
+str_indent "  	mixed indent"
+assert_eq "str_indent mixed" "$R" "  	"
+
+str_indent ""
+assert_eq "str_indent empty string" "$R" ""
+
+str_indent "   "
+assert_eq "str_indent all whitespace" "$R" "   "
+
+str_indent "  hello world"
+assert_eq "str_indent doesn't capture middle spaces" "$R" "  "
+
+if str_starts '$PATH' '$'
+  pass "str_starts dollar sign"
+else
+  fail "str_starts dollar sign"
+end
+
+if str_ends 'file$' '$'
+  pass "str_ends dollar sign"
+else
+  fail "str_ends dollar sign"
+end
+
+if str_contains '$HOME/path' '$HOME'
+  pass "str_contains dollar path"
+else
+  fail "str_contains dollar path"
+end
+
+str_after 'key=$value' '='
+assert_eq "str_after with dollar in value" "$R" '$value'
+
+str_before '$key=value' '='
+assert_eq "str_before with dollar in key" "$R" '$key'
+
+if str_contains 'path\\to\\file' '\\'
+  pass "str_contains backslash"
+else
+  fail "str_contains backslash"
+end
+
+str_after 'C:\\Users\\file' '\\'
+assert_eq "str_after backslash" "$R" 'Users\\file'
+
+str_after_last 'C:\\Users\\file' '\\'
+assert_eq "str_after_last backslash" "$R" "file"
+
+if str_contains "it's a test" "'"
+  pass "str_contains single quote"
+else
+  fail "str_contains single quote"
+end
+
+if str_contains 'say "hello"' '"'
+  pass "str_contains double quote"
+else
+  fail "str_contains double quote"
+end
+
+path="/home/user/documents/file.txt"
+str_after_last "$path" "/"
+filename="$R"
+assert_eq "extract filename" "$filename" "file.txt"
+str_before_last "$path" "/"
+dirname="$R"
+assert_eq "extract dirname" "$dirname" "/home/user/documents"
+str_after_last "$filename" "."
+ext="$R"
+assert_eq "extract extension" "$ext" "txt"
+str_before_last "$filename" "."
+base="$R"
+assert_eq "extract basename" "$base" "file"
+
+url="https://example.com:8080/path/to/page?query=1"
+str_after "$url" "://"
+rest="$R"
+str_before "$rest" "/"
+host_port="$R"
+str_before "$host_port" ":"
+host="$R"
+assert_eq "url host" "$host" "example.com"
+str_after "$host_port" ":"
+port="$R"
+assert_eq "url port" "$port" "8080"
+
+str_after "a///b" "/"
+assert_eq "str_after repeated delim" "$R" "//b"
+str_after_last "a///b" "/"
+assert_eq "str_after_last repeated delim" "$R" "b"
+str_before "a///b" "/"
+assert_eq "str_before repeated delim" "$R" "a"
+str_before_last "a///b" "/"
+assert_eq "str_before_last repeated delim" "$R" "a//"
+
+long_str="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaX"
+if str_ends "$long_str" "X"
+  pass "str_ends long string"
+else
+  fail "str_ends long string"
+end
+
+if str_starts "$long_str" "aaaa"
+  pass "str_starts long string"
+else
+  fail "str_starts long string"
+end
+
+if str_contains "café" "fé"
+  pass "str_contains extended ascii"
+else
+  fail "str_contains extended ascii"
+end
+
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
 
 echo ""

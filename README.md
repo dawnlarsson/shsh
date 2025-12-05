@@ -178,6 +178,43 @@ default_unset port "8080"      # set only if unset (preserves empty)
 ```
 ---
 
+## Strings
+
+### Testing
+```sh
+str_starts "hello world" "hello"   # returns 0 (true)
+str_ends "file.txt" ".txt"         # returns 0 (true)
+str_contains "hello" "ell"         # returns 0 (true)
+```
+
+### Extraction
+```sh
+str_after "path/to/file" "/"       # R="to/file" (after first)
+str_before "key=value" "="         # R="key" (before first)
+str_after_last "a/b/c" "/"         # R="c" (after last)
+str_before_last "a.b.c" "."        # R="a.b" (before last)
+```
+
+Returns non-zero if delimiter not found.
+
+### Trimming
+```sh
+str_ltrim "  hello"                # R="hello"
+str_rtrim "hello  "                # R="hello"
+str_trim "  hello  "               # R="hello"
+str_indent "  hello"               # R="  " (leading whitespace)
+```
+
+### Example: Path parsing
+```sh
+path="/home/user/file.txt"
+str_after_last "$path" "/"; filename="$R"   # file.txt
+str_before_last "$path" "/"; dirname="$R"   # /home/user
+str_after_last "$filename" "."; ext="$R"    # txt
+```
+
+---
+
 ## Files
 ```sh
 file_read /etc/hostname           # R=contents
