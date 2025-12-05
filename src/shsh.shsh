@@ -1,0 +1,37 @@
+#
+#       shsh - shell in shell
+#       Shell without the hieroglyphics
+
+VERSION="0.13.0"
+
+shsh_install() {
+        profile="$HOME/.profile"
+
+        switch $SHELL
+        case */bash:    profile="$HOME/.bashrc"
+        case */zsh:     profile="$HOME/.zshrc"
+        case */fish:    profile="$HOME/.config/fish/config.fish"
+        end
+}
+
+switch $1
+        case -c:        printf "not implemented yet.\n"
+        case -t:        printf "not implemented yet.\n"
+        case -v:        printf "$VERSION\n"
+        case -:         printf "not implemented yet.\n"
+        case install:   shsh_install
+        case uninstall: printf "not implemented yet.\n"
+        
+        default
+                printf "shsh v$VERSION\n\n"
+                printf "usage: shsh [command] [args...]\n\n"
+                printf "<script>        run script file\n"
+                printf "      -c        run inline script\n"
+                printf "      -t        transform file\n"
+                printf "      -v        version\n"
+                printf "      -         read from stdin\n\n"
+                printf "install         install shsh system wide\n"
+                printf "uninstall       uninstall shsh from system\n\n"
+end
+
+exit 0

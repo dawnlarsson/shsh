@@ -39,13 +39,9 @@ fi
 
 #### After
 ```sh
-if $x <= 10
-  echo "low"
-elif $x > 20
-  echo "high"
-else
-  echo "mid"
-end
+if $x <= 10:  echo "low"
+elif $x > 20: echo "high"
+else:         echo "mid"
 ```
 
 Operators: `==` `!=` `<` `>` `<=` `>=`
@@ -64,12 +60,9 @@ esac
 #### After
 ```sh
 switch $opt
-case a
-  run_a
-case b|c
-  run_bc
-default
-  exit 1
+case a:    run_a
+case b|c:  run_bc
+default:   exit 1
 end
 ```
 
@@ -180,9 +173,7 @@ shsh transforms syntax sugar to POSIX shell, then evals a toolkit providing arra
 
 ```sh
 # input
-if $x < 10
-  echo "small"
-end
+if $x < 10: echo "small"
 
 # transformed
 if is "$x < 10"; then

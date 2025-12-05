@@ -1,5 +1,5 @@
 #!/bin/sh
-VERSION="0.13.0"
+VERSION="0.14.0"
 
 TOOLKIT='
 _shsh_sq=$(printf "\\047")
@@ -215,10 +215,8 @@ tokenize() {
 }
 
 is() {
-  # Fast path: no quotes means safe word splitting
   case "$1" in
     *"$_shsh_dq"*|*"$_shsh_sq"*)
-      # Quotes present - need careful parsing
       _is_in="$1" _is_dq=0 _is_sq=0 _is_esc=0 _is_p=0
       _is_op="" _is_op_at=-1 _is_op_len=0
       while [ -n "$_is_in" ]; do
@@ -264,7 +262,6 @@ is() {
       esac
       ;;
     *)
-      # Fast path: word splitting
       case "$1" in *"*"*|*"?"*|*"["*) set -f; set -- $1; set +f;; *) set -- $1;; esac
       case "$2" in
         "<=") [ "$1" -le "$3" ] 2>/dev/null;;
@@ -290,18 +287,14 @@ bit_8() {
     _b8_arg="${_b8_arg%,}"
     case "$_b8_arg" in
       "$_shsh_dq"*"$_shsh_dq")
-        # Quoted string: print literal
         _b8_str="${_b8_arg#"$_shsh_dq"}"
         printf "%s" "${_b8_str%"$_shsh_dq"}"
         ;;
       *)
         if _is_int "$_b8_arg"; then
-          # Number: calc octal digits manually (fast) and print via %b
           _b8_v=$((${_b8_arg}))
-          # Construct \ooo sequence: (v>>6)&7, (v>>3)&7, v&7
           printf "%b" "\\$(( (_b8_v >> 6) & 7 ))$(( (_b8_v >> 3) & 7 ))$(( _b8_v & 7 ))"
         else
-          # Raw non-numeric token: print literal
           printf "%s" "$_b8_arg"
         fi
         ;;
@@ -313,14 +306,10 @@ bit_16() {
   _b16_buf=""
   for _b16_arg in "$@"; do
     _b16_v=$((${_b16_arg%,}))
-    # Extract bytes
     _b16_hi=$(( (_b16_v >> 8) & 0xff ))
     _b16_lo=$(( _b16_v & 0xff ))
-    
-    # Pre-calc octal strings
     _o_hi="\\$(( (_b16_hi >> 6) & 7 ))$(( (_b16_hi >> 3) & 7 ))$(( _b16_hi & 7 ))"
     _o_lo="\\$(( (_b16_lo >> 6) & 7 ))$(( (_b16_lo >> 3) & 7 ))$(( _b16_lo & 7 ))"
-
     case "$ENDIAN" in
       big|Big|BIG|BE|be|1) _b16_buf="$_b16_buf$_o_hi$_o_lo" ;;
       *)                   _b16_buf="$_b16_buf$_o_lo$_o_hi" ;;
@@ -333,18 +322,14 @@ bit_32() {
   _b32_buf=""
   for _b32_arg in "$@"; do
     _b32_v=$((${_b32_arg%,}))
-    # Extract 4 bytes
     _b1=$(( (_b32_v >> 24) & 0xff ))
     _b2=$(( (_b32_v >> 16) & 0xff ))
     _b3=$(( (_b32_v >> 8) & 0xff ))
     _b4=$(( _b32_v & 0xff ))
-
-    # Convert to octal escapes
     _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
     _o2="\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))"
     _o3="\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))"
     _o4="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
-
     case "$ENDIAN" in
       big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o1$_o2$_o3$_o4" ;;
       *)                   _b32_buf="$_b32_buf$_o4$_o3$_o2$_o1" ;;
@@ -357,29 +342,20 @@ bit_64() {
   _b64_buf=""
   for _b64_arg in "$@"; do
     _b64_v=$((${_b64_arg%,}))
-    # Split into 32-bit halves for safety
     _b64_h=$(( _b64_v >> 32 ))
     _b64_l=$(( _b64_v & 0xFFFFFFFF ))
-
-    # Extract bytes from High
     _h1=$(( (_b64_h >> 24) & 0xff )); _h2=$(( (_b64_h >> 16) & 0xff ))
     _h3=$(( (_b64_h >> 8) & 0xff ));  _h4=$(( _b64_h & 0xff ))
-    
-    # Extract bytes from Low
     _l1=$(( (_b64_l >> 24) & 0xff )); _l2=$(( (_b64_l >> 16) & 0xff ))
     _l3=$(( (_b64_l >> 8) & 0xff ));  _l4=$(( _b64_l & 0xff ))
-
-    # Octal conversion
     _oh1="\\$(( (_h1>>6)&7 ))$(( (_h1>>3)&7 ))$(( _h1&7 ))"
     _oh2="\\$(( (_h2>>6)&7 ))$(( (_h2>>3)&7 ))$(( _h2&7 ))"
     _oh3="\\$(( (_h3>>6)&7 ))$(( (_h3>>3)&7 ))$(( _h3&7 ))"
     _oh4="\\$(( (_h4>>6)&7 ))$(( (_h4>>3)&7 ))$(( _h4&7 ))"
-    
     _ol1="\\$(( (_l1>>6)&7 ))$(( (_l1>>3)&7 ))$(( _l1&7 ))"
     _ol2="\\$(( (_l2>>6)&7 ))$(( (_l2>>3)&7 ))$(( _l2&7 ))"
     _ol3="\\$(( (_l3>>6)&7 ))$(( (_l3>>3)&7 ))$(( _l3&7 ))"
     _ol4="\\$(( (_l4>>6)&7 ))$(( (_l4>>3)&7 ))$(( _l4&7 ))"
-
     case "$ENDIAN" in
       big|Big|BIG|BE|be|1) _b64_buf="$_b64_buf$_oh1$_oh2$_oh3$_oh4$_ol1$_ol2$_ol3$_ol4" ;;
       *)                   _b64_buf="$_b64_buf$_ol4$_ol3$_ol2$_ol1$_oh4$_oh3$_oh2$_oh1" ;;
@@ -419,7 +395,37 @@ transform_line() {
   _tl_stripped="${_tl_line#"${_tl_line%%[![:space:]]*}"}"
   _tl_indent="${_tl_line%%"$_tl_stripped"}"
   
+  if [ "$_t_sl_if" = "1" ]; then
+    case "$_tl_stripped" in
+      "elif "*": "*|"else:"*|"else: "*)
+        ;;
+      "elif "*|"else")
+        _t_sl_if=0
+        _t_if_depth=$((_t_if_depth + 1))
+        ;;
+      *)
+        printf '%s\n' "${_t_sl_indent}fi"
+        _t_sl_if=0
+        ;;
+    esac
+  fi
+  
   case "$_tl_stripped" in
+    "if "*": "*)
+      _tl_rest="${_tl_stripped#if }"
+      _tl_cond="${_tl_rest%%: *}"
+      _tl_stmt="${_tl_rest#*: }"
+      case "$_tl_cond" in
+        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
+          _tl_escape "$_tl_cond"
+          printf '%s\n' "${_tl_indent}if is \"$_te_out\"; then"
+          ;;
+        *) printf '%s\n' "${_tl_indent}if $_tl_cond; then" ;;
+      esac
+      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
+      _t_sl_if=1
+      _t_sl_indent="$_tl_indent"
+      ;;
     "if "*)
       case "$_tl_stripped" in
         *";"*) printf '%s\n' "$_tl_line" ;;
@@ -432,6 +438,19 @@ transform_line() {
       esac
       _t_if_depth=$((_t_if_depth + 1))
       ;;
+    "elif "*": "*)
+      _tl_rest="${_tl_stripped#elif }"
+      _tl_cond="${_tl_rest%%: *}"
+      _tl_stmt="${_tl_rest#*: }"
+      case "$_tl_cond" in
+        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
+          _tl_escape "$_tl_cond"
+          printf '%s\n' "${_tl_indent}elif is \"$_te_out\"; then"
+          ;;
+        *) printf '%s\n' "${_tl_indent}elif $_tl_cond; then" ;;
+      esac
+      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
+      ;;
     "elif "*)
       case "$_tl_stripped" in
         *";"*) printf '%s\n' "$_tl_line" ;;
@@ -442,6 +461,16 @@ transform_line() {
           ;;
         *) printf '%s\n' "${_tl_indent}${_tl_stripped}; then" ;;
       esac
+      ;;
+    "else:"*|"else: "*)
+      _tl_stmt="${_tl_stripped#else:}"
+      _tl_stmt="${_tl_stmt# }"
+      printf '%s\n' "${_tl_indent}else"
+      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
+      if [ "$_t_sl_if" = "1" ]; then
+        printf '%s\n' "${_tl_indent}fi"
+        _t_sl_if=0
+      fi
       ;;
     "else") printf '%s\n' "${_tl_indent}else" ;;
     "while "*)
@@ -470,10 +499,36 @@ transform_line() {
       ;;
     "case "*)
       if [ "$_t_sw_depth" -gt 0 ]; then
-        _tl_pattern="${_tl_stripped#case }"
+        _tl_rest="${_tl_stripped#case }"
+        case "$_tl_rest" in
+          *": "*)
+            _tl_pattern="${_tl_rest%%: *}"
+            _tl_stmt="${_tl_rest#*: }"
+            eval "_t_first=\$_t_sw_first_$_t_sw_depth"
+            [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
+            printf '%s\n' "${_tl_indent}${_tl_pattern})"
+            printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
+            eval "_t_sw_first_$_t_sw_depth=0"
+            ;;
+          *)
+            eval "_t_first=\$_t_sw_first_$_t_sw_depth"
+            [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
+            printf '%s\n' "${_tl_indent}${_tl_rest})"
+            eval "_t_sw_first_$_t_sw_depth=0"
+            ;;
+        esac
+      else
+        printf '%s\n' "$_tl_line"
+      fi
+      ;;
+    "default:"*)
+      if [ "$_t_sw_depth" -gt 0 ]; then
+        _tl_stmt="${_tl_stripped#default:}"
+        _tl_stmt="${_tl_stmt# }"
         eval "_t_first=\$_t_sw_first_$_t_sw_depth"
         [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
-        printf '%s\n' "${_tl_indent}${_tl_pattern})"
+        printf '%s\n' "${_tl_indent}*)"
+        printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
         eval "_t_sw_first_$_t_sw_depth=0"
       else
         printf '%s\n' "$_tl_line"
@@ -568,10 +623,11 @@ transform_line() {
 }
 
 transform() {
-  _t_sw_depth=0 _t_if_depth=0
+  _t_sw_depth=0 _t_if_depth=0 _t_sl_if=0 _t_sl_indent=""
   while IFS= read -r _t_line || [ -n "$_t_line" ]; do
     transform_line "$_t_line"
   done
+  [ "$_t_sl_if" = "1" ] && printf '%s\n' "${_t_sl_indent}fi"
 }
 
 usage() {

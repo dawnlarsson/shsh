@@ -1084,6 +1084,204 @@ mod_larger %= 10
 assert_eq "x %= larger" "$mod_larger" "3"
 
 echo ""
+echo "=== Single-Line If ==="
+
+x=5
+if $x == 5: r1="yes"
+assert_eq "single if" "$r1" "yes"
+
+x=10
+if $x == 5: r2="five"
+else: r2="not five"
+assert_eq "single if/else" "$r2" "not five"
+
+x=15
+if $x < 10: r3="low"
+elif $x < 20: r3="mid"
+else: r3="high"
+assert_eq "single if/elif/else" "$r3" "mid"
+
+x=5
+r4="unchanged"
+if $x == 99: r4="changed"
+assert_eq "single if no match" "$r4" "unchanged"
+
+x=5
+if $x == 5: r5="match"
+r5="${r5}-after"
+assert_eq "single if then code" "$r5" "match-after"
+
+if 1 == 1: m1="a"
+if 2 == 2: m2="b"
+if 3 == 3: m3="c"
+assert_eq "multi single if 1" "$m1" "a"
+assert_eq "multi single if 2" "$m2" "b"
+assert_eq "multi single if 3" "$m3" "c"
+
+if 1 == 1: cs_result=$(echo "hello")
+assert_eq "single if cmd sub" "$cs_result" "hello"
+
+n=10
+if $n > 5: n=$((n * 2))
+assert_eq "single if arithmetic" "$n" "20"
+
+v=4
+if $v == 1: lc="one"
+elif $v == 2: lc="two"
+elif $v == 3: lc="three"
+elif $v == 4: lc="four"
+elif $v == 5: lc="five"
+else: lc="other"
+assert_eq "long elif chain" "$lc" "four"
+
+x=5
+if $x < 3: mixed="low"
+elif $x < 10
+  mixed="mid"
+  mixed="${mixed}-multi"
+else: mixed="high"
+end
+assert_eq "mixed single/multi" "$mixed" "mid-multi"
+
+outer=1
+inner=2
+if $outer == 1
+  if $inner == 2: nested="found"
+end
+assert_eq "nested single in multi" "$nested" "found"
+
+loop_result=""
+for i in 1 2 3
+  if $i == 2: loop_result="${loop_result}X"
+  else: loop_result="${loop_result}O"
+done
+assert_eq "single if in loop" "$loop_result" "OXO"
+
+s="hello"
+if "$s" == "hello": str_r="match"
+else: str_r="no"
+assert_eq "single if string" "$str_r" "match"
+
+a=1
+if $a == 1: only1="yes"
+b=2
+if $b == 2: only2="yes"
+assert_eq "consecutive single ifs 1" "$only1" "yes"
+assert_eq "consecutive single ifs 2" "$only2" "yes"
+
+if 1 == 1: time_val="12:30:45"
+assert_eq "colon in value" "$time_val" "12:30:45"
+
+eof_test="no"
+if 1 == 1: eof_test="yes"
+
+echo ""
+echo "=== Single-Line Switch Cases ==="
+
+_sl1=""
+for val in foo bar baz other
+  switch $val
+  case foo: _sl1="${_sl1}F"
+  case bar|baz: _sl1="${_sl1}B"
+  default: _sl1="${_sl1}X"
+  end
+done
+assert_eq "single-line switch basic" "$_sl1" "FBBX"
+
+_sl2=""
+switch "unknown"
+default: _sl2="hit"
+end
+assert_eq "single-line default only" "$_sl2" "hit"
+
+_sl3=""
+switch "test"
+case foo: _sl3="F"
+case test
+  _sl3="T"
+  _sl3="${_sl3}EST"
+default: _sl3="X"
+end
+assert_eq "mixed single/multi switch" "$_sl3" "TEST"
+
+_sl4=0
+for v in a b c d
+  switch $v
+  case a: _sl4=$((_sl4 + 1))
+  case b: _sl4=$((_sl4 + 10))
+  case c|d: _sl4=$((_sl4 + 100))
+  end
+done
+assert_eq "single-line switch arithmetic" "$_sl4" "211"
+
+switch "cmd"
+case cmd: sw_cmd=$(echo "hello")
+default: sw_cmd="no"
+end
+assert_eq "single-line switch cmd sub" "$sw_cmd" "hello"
+
+_nested_sw=""
+for outer in a b
+  switch $outer
+  case a: _nested_sw="${_nested_sw}A"
+  case b
+    for inner in x y
+      switch $inner
+      case x: _nested_sw="${_nested_sw}X"
+      case y: _nested_sw="${_nested_sw}Y"
+      end
+    done
+  end
+done
+assert_eq "nested switch single-line" "$_nested_sw" "AXY"
+
+switch "time"
+case time: sw_colon="12:30"
+default: sw_colon="none"
+end
+assert_eq "switch colon in value" "$sw_colon" "12:30"
+
+switch "test123"
+case test*: sw_glob="matched"
+default: sw_glob="no"
+end
+assert_eq "single-line switch glob" "$sw_glob" "matched"
+
+_sw_nomatch=""
+switch "xyz"
+case a: _sw_nomatch="a"
+case b: _sw_nomatch="b"
+end
+assert_eq "single-line switch no match" "$_sw_nomatch" ""
+
+_all_sw=""
+switch "middle"
+case first: _all_sw="1"
+case middle: _all_sw="2"
+case last: _all_sw="3"
+end
+assert_eq "all single-line switch" "$_all_sw" "2"
+
+_sw_in_if=""
+if 1 == 1
+  switch "yes"
+  case yes: _sw_in_if="found"
+  default: _sw_in_if="no"
+  end
+end
+assert_eq "switch in if block" "$_sw_in_if" "found"
+
+_sw_loop=""
+for i in 1 2 3
+  switch $i
+  case 1: _sw_loop="${_sw_loop}A"
+  case 2: _sw_loop="${_sw_loop}B"
+  case 3: _sw_loop="${_sw_loop}C"
+  end
+done
+assert_eq "single-line switch in loop" "$_sw_loop" "ABC"
+
+echo ""
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
 
 echo ""
