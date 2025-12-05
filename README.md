@@ -25,20 +25,17 @@ shsh -t script.sh        # transform only (no toolkit)
 ## Syntax
 
 ### Conditionals
-
-#### Before
 ```sh
-if [ "$x" -le 10 ]; then
+# multi-line
+if $x <= 10
   echo "low"
-elif [ "$x" -gt 20 ]; then
+elif $x > 20
   echo "high"
 else
   echo "mid"
-fi
-```
+end
 
-#### After
-```sh
+# single-line
 if $x <= 10:  echo "low"
 elif $x > 20: echo "high"
 else:         echo "mid"
@@ -46,25 +43,34 @@ else:         echo "mid"
 
 Operators: `==` `!=` `<` `>` `<=` `>=`
 
-### Switch
-
-#### Before
+Works with strings and numbers:
 ```sh
-case "$opt" in
-  a) run_a ;;
-  b|c) run_bc ;;
-  *) exit 1 ;;
-esac
+if "$name" == "alice": echo "hi alice"
+if $count > 0: echo "has items"
 ```
+---
 
-#### After
+### Switch
 ```sh
+# multi-line
 switch $opt
-case a:    run_a
-case b|c:  run_bc
-default:   exit 1
+case a
+  run_a
+case b|c
+  run_bc
+default
+  exit 1
+end
+
+# single-line
+switch $opt
+case a:   run_a
+case b|c: run_bc
+default:  exit 1
 end
 ```
+
+---
 
 ### Loops
 ```sh
@@ -80,8 +86,20 @@ done
 
 ---
 
-## Arrays
+### Arithmetic Operators
+```sh
+i++          # increment
+i--          # decrement
+i += 5       # add
+i -= 3       # subtract
+i *= 2       # multiply
+i /= 4       # divide
+i %= 3       # modulo
+```
 
+---
+
+## Arrays
 ```sh
 array_add arr "first"
 array_add arr "second"
@@ -94,9 +112,12 @@ array_len arr            # R=3
 array_set arr 1 "SECOND"
 array_get arr 1          # R="SECOND"
 
-array_delete arr 1       # remove index 1
+array_delete arr 1       # remove index 1, shifts elements down
+array_unset arr 1        # remove index 1, leaves hole (sparse)
 array_clear arr          # remove all
 ```
+
+---
 
 ### Iteration
 ```sh
@@ -118,7 +139,6 @@ array_for arr find_it
 ---
 
 ## Maps
-
 ```sh
 map_set config host "localhost"
 map_set config port "8080"
@@ -130,14 +150,35 @@ map_has config host      # returns 0 (true)
 map_has config missing   # returns 1 (false)
 
 map_delete config port
+map_clear config         # remove all keys
 ```
 
 Keys must be alphanumeric with underscores.
+---
+
+### Enumeration
+```sh
+# get all keys as array
+map_keys config keys_arr
+array_for keys_arr print_key
+
+# iterate directly (K=key, R=value)
+print_entry() {
+  echo "$K = $R"
+}
+map_for config print_entry
+```
 
 ---
 
-## Files
+## Defaults
+```sh
+default host "localhost"       # set if empty or unset
+default_unset port "8080"      # set only if unset (preserves empty)
+```
+---
 
+## Files
 ```sh
 file_read /etc/hostname           # R=contents
 file_write /tmp/out.txt "data"
@@ -164,6 +205,22 @@ array_get tokens 2       # R="1"
 ```
 
 Handles quoted strings and nested parens.
+
+---
+
+## Binary Output
+
+Write raw bytes for binary file generation:
+```sh
+bit_8 0x7f 0x45 0x4c 0x46    # ELF magic
+bit_8 "ABC"                   # string bytes
+bit_8 65 66 67                # decimal
+
+bit_16 0x1234                 # 2 bytes
+bit_32 0xAABBCCDD             # 4 bytes
+bit_64 0x1122334455667788     # 8 bytes
+bit_128 0x00112233...         # 16 bytes (hex string)
+```
 
 ---
 

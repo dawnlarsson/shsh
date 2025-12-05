@@ -1,5 +1,5 @@
 #!/bin/sh
-VERSION="0.14.0"
+VERSION="0.15.0"
 
 TOOLKIT='
 _shsh_sq=$(printf "\\047")
@@ -108,6 +108,62 @@ map_set() {
   _shsh_check_name "$1" || return 1
   _shsh_check_name "$2" || return 1
   eval "__shsh_map_${1}_${2}=\"\$3\""
+  # track key if new
+  eval "_mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
+  if [ -z "$_mset_exists" ]; then
+    eval "__shsh_map_${1}_${2}__exists=1"
+    eval "_mset_idx=\"\${__shsh_mapkeys_${1}_n:-0}\""
+    eval "__shsh_mapkeys_${1}_$_mset_idx=\"$2\""
+    eval "__shsh_mapkeys_${1}_n=$((_mset_idx + 1))"
+  fi
+}
+
+map_keys() {
+  _shsh_check_name "$1" || return 1
+  _shsh_check_name "$2" || return 1
+  eval "__shsh_${2}_n=0"
+  eval "_mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  _mk_i=0
+  while [ "$_mk_i" -lt "$_mk_len" ]; do
+    eval "_mk_key=\"\${__shsh_mapkeys_${1}_$_mk_i}\""
+    # skip deleted keys
+    eval "_mk_exists=\"\${__shsh_map_${1}_${_mk_key}+x}\""
+    [ -n "$_mk_exists" ] && array_add "$2" "$_mk_key"
+    _mk_i=$((_mk_i + 1))
+  done
+}
+
+map_for() {
+  _shsh_check_name "$1" || return 1
+  _mf_d=${_mf_d:--1}; _mf_d=$((_mf_d + 1))
+  eval "_mf_len_$_mf_d=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  eval "_mf_i_$_mf_d=0"
+  while eval "[ \$_mf_i_$_mf_d -lt \$_mf_len_$_mf_d ]"; do
+    eval "_mf_idx=\$_mf_i_$_mf_d"
+    eval "_mf_key=\"\${__shsh_mapkeys_${1}_$_mf_idx}\""
+    eval "_mf_exists=\"\${__shsh_map_${1}_${_mf_key}+x}\""
+    if [ -n "$_mf_exists" ]; then
+      eval "R=\"\${__shsh_map_${1}_${_mf_key}}\""
+      K="$_mf_key"
+      "$2" || { _mf_d=$((_mf_d - 1)); return 0; }
+    fi
+    eval "_mf_i_$_mf_d=\$((\$_mf_i_$_mf_d + 1))"
+  done
+  _mf_d=$((_mf_d - 1))
+}
+
+map_clear() {
+  _shsh_check_name "$1" || return 1
+  eval "_mc_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  _mc_i=0
+  while [ "$_mc_i" -lt "$_mc_len" ]; do
+    eval "_mc_key=\"\${__shsh_mapkeys_${1}_$_mc_i}\""
+    eval "unset __shsh_map_${1}_${_mc_key}"
+    eval "unset __shsh_map_${1}_${_mc_key}__exists"
+    eval "unset __shsh_mapkeys_${1}_$_mc_i"
+    _mc_i=$((_mc_i + 1))
+  done
+  eval "__shsh_mapkeys_${1}_n=0"
 }
 
 map_get() {

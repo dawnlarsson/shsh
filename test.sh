@@ -1323,6 +1323,229 @@ else
 end
 
 echo ""
+echo "=== Map Enumeration ==="
+
+map_set enum_map alpha "1"
+map_set enum_map beta "2"
+map_set enum_map gamma "3"
+map_keys enum_map enum_keys
+array_len enum_keys; assert_eq "map_keys count" "$R" "3"
+
+_found_alpha=0 _found_beta=0 _found_gamma=0
+check_enum_key() {
+  case "$R" in
+    alpha) _found_alpha=1 ;;
+    beta)  _found_beta=1 ;;
+    gamma) _found_gamma=1 ;;
+  esac
+}
+array_for enum_keys check_enum_key
+if [ "$_found_alpha" = "1" ] && [ "$_found_beta" = "1" ] && [ "$_found_gamma" = "1" ]; then
+  pass "map_keys contains all keys"
+else
+  fail "map_keys missing keys (a=$_found_alpha b=$_found_beta g=$_found_gamma)"
+fi
+
+map_keys empty_map empty_keys 2>/dev/null
+array_len empty_keys; assert_eq "map_keys empty" "$R" "0"
+
+map_set del_enum_map a "1"
+map_set del_enum_map b "2"
+map_set del_enum_map c "3"
+map_delete del_enum_map b
+map_keys del_enum_map del_enum_keys
+array_len del_enum_keys; assert_eq "map_keys after delete count" "$R" "2"
+_has_a=0 _has_b=0 _has_c=0
+check_del_key() {
+  case "$R" in
+    a) _has_a=1 ;;
+    b) _has_b=1 ;;
+    c) _has_c=1 ;;
+  esac
+}
+array_for del_enum_keys check_del_key
+if [ "$_has_a" = "1" ] && [ "$_has_b" = "0" ] && [ "$_has_c" = "1" ]; then
+  pass "map_keys excludes deleted"
+else
+  fail "map_keys delete handling (a=$_has_a b=$_has_b c=$_has_c)"
+fi
+
+map_set dup_map key "first"
+map_set dup_map key "second"
+map_set dup_map key "third"
+map_keys dup_map dup_keys
+array_len dup_keys; assert_eq "map_keys no duplicates" "$R" "1"
+array_get dup_keys 0; assert_eq "map_keys single key" "$R" "key"
+map_get dup_map key; assert_eq "map overwrite value" "$R" "third"
+
+map_set for_map x "10"
+map_set for_map y "20"
+map_set for_map z "30"
+_for_sum=0
+_for_keys=""
+sum_map() {
+  _for_sum=$((_for_sum + R))
+  _for_keys="${_for_keys}${K}"
+}
+map_for for_map sum_map
+assert_eq "map_for sum values" "$_for_sum" "60"
+
+case "$_for_keys" in
+  *x*y*z*|*x*z*y*|*y*x*z*|*y*z*x*|*z*x*y*|*z*y*x*)
+    pass "map_for visits all keys" ;;
+  *)
+    fail "map_for keys incomplete: $_for_keys" ;;
+esac
+
+_empty_visited=0
+empty_cb() { _empty_visited=1; }
+map_for nonexistent_map empty_cb 2>/dev/null
+assert_eq "map_for empty" "$_empty_visited" "0"
+
+map_set exit_map a "1"
+map_set exit_map b "2"
+map_set exit_map c "3"
+_exit_count=0
+exit_after_two() {
+  _exit_count=$((_exit_count + 1))
+  [ "$_exit_count" -ge 2 ] && return 1
+  return 0
+}
+map_for exit_map exit_after_two
+assert_eq "map_for early exit" "$_exit_count" "2"
+
+map_set fd_map p "1"
+map_set fd_map q "2"
+map_set fd_map r "3"
+map_delete fd_map q
+_fd_vals=""
+collect_fd() { _fd_vals="${_fd_vals}${R}"; }
+map_for fd_map collect_fd
+case "$_fd_vals" in
+  "13"|"31") pass "map_for skips deleted" ;;
+  *) fail "map_for skips deleted (got: $_fd_vals)" ;;
+esac
+
+map_set kr_map foo "FOO"
+map_set kr_map bar "BAR"
+_kr_pairs=""
+check_kr() { _kr_pairs="${_kr_pairs}${K}=${R} "; }
+map_for kr_map check_kr
+case "$_kr_pairs" in
+  *"foo=FOO"*"bar=BAR"*|*"bar=BAR"*"foo=FOO"*)
+    pass "map_for K and R correct" ;;
+  *)
+    fail "map_for K/R mismatch: $_kr_pairs" ;;
+esac
+
+map_set twice_map a "1"
+map_keys twice_map twice_keys1
+map_set twice_map b "2"
+map_keys twice_map twice_keys2
+array_len twice_keys2; assert_eq "map_keys refresh" "$R" "2"
+
+_large_i=0
+while [ "$_large_i" -lt 50 ]; do
+  map_set large_map "key$_large_i" "val$_large_i"
+  _large_i=$((_large_i + 1))
+done
+map_keys large_map large_keys
+array_len large_keys; assert_eq "large map keys" "$R" "50"
+_large_count=0
+count_large() { _large_count=$((_large_count + 1)); }
+map_for large_map count_large
+assert_eq "large map_for count" "$_large_count" "50"
+
+map_set single_map only "value"
+map_keys single_map single_keys
+array_len single_keys; assert_eq "single map keys" "$R" "1"
+array_get single_keys 0; assert_eq "single map key value" "$R" "only"
+_single_k="" _single_v=""
+get_single() { _single_k="$K"; _single_v="$R"; }
+map_for single_map get_single
+assert_eq "single map_for K" "$_single_k" "only"
+assert_eq "single map_for R" "$_single_v" "value"
+
+map_set reuse_map a "1"
+map_set reuse_map b "2"
+map_delete reuse_map a
+map_delete reuse_map b
+map_set reuse_map c "3"
+map_keys reuse_map reuse_keys
+array_len reuse_keys; assert_eq "reuse after delete count" "$R" "1"
+array_get reuse_keys 0; assert_eq "reuse after delete key" "$R" "c"
+
+map_keys "bad-name" out 2>/dev/null
+ret=$?
+if [ "$ret" != "0" ]; then
+  pass "map_keys rejects invalid map name"
+else
+  fail "map_keys accepted invalid map name"
+fi
+
+map_keys valid_map "bad-out" 2>/dev/null
+ret=$?
+if [ "$ret" != "0" ]; then
+  pass "map_keys rejects invalid output name"
+else
+  fail "map_keys accepted invalid output name"
+fi
+
+map_for "bad-name" echo 2>/dev/null
+ret=$?
+if [ "$ret" != "0" ]; then
+  pass "map_for rejects invalid name"
+else
+  fail "map_for accepted invalid name"
+fi
+
+map_set outer_m a "1"
+map_set outer_m b "2"
+map_set inner_m x "10"
+map_set inner_m y "20"
+_nested_sum=0
+inner_sum() { _nested_sum=$((_nested_sum + R)); }
+outer_iter() { map_for inner_m inner_sum; }
+map_for outer_m outer_iter
+assert_eq "nested map_for" "$_nested_sum" "60"
+
+map_set empty_val_map key ""
+map_keys empty_val_map ev_keys
+array_len ev_keys; assert_eq "empty value map_keys" "$R" "1"
+_ev_visited=0
+check_empty_val() { _ev_visited=1; assert_eq "empty value R" "$R" ""; }
+map_for empty_val_map check_empty_val
+assert_eq "empty value visited" "$_ev_visited" "1"
+
+map_set zero_val_map num "0"
+_zv=""
+get_zero() { _zv="$R"; }
+map_for zero_val_map get_zero
+assert_eq "zero value map_for" "$_zv" "0"
+
+map_set stable_map exists "yes"
+map_delete stable_map never_existed
+map_keys stable_map stable_keys
+array_len stable_keys; assert_eq "stable after bad delete" "$R" "1"
+
+map_set readd_map key "first"
+map_delete readd_map key
+map_set readd_map key "second"
+map_keys readd_map readd_keys
+array_len readd_keys; assert_eq "re-add deleted key count" "$R" "1"
+map_get readd_map key; assert_eq "re-add deleted value" "$R" "second"
+
+map_set clear_map a "1"
+map_set clear_map b "2"
+map_clear clear_map
+map_keys clear_map clear_keys
+array_len clear_keys; assert_eq "map_clear keys" "$R" "0"
+map_get clear_map a; assert_eq "map_clear value gone" "$R" ""
+
+map_set clear_map fresh "new"
+map_keys clear_map clear_keys2
+array_len clear_keys2; assert_eq "map_clear re-add" "$R" "1"
+
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
 
 echo ""

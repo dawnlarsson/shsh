@@ -2,26 +2,37 @@
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
 
-VERSION="0.13.0"
-
-shsh_install() {
-        profile="$HOME/.profile"
-
-        switch $SHELL
-        case */bash:    profile="$HOME/.bashrc"
-        case */zsh:     profile="$HOME/.zshrc"
-        case */fish:    profile="$HOME/.config/fish/config.fish"
-        end
-}
+VERSION="0.15.0"
 
 switch $1
         case -c:        printf "not implemented yet.\n"
         case -t:        printf "not implemented yet.\n"
         case -v:        printf "$VERSION\n"
         case -:         printf "not implemented yet.\n"
-        case install:   shsh_install
+        case install
+                shell="$HOME/.profile"
+
+                switch $SHELL
+                case */bash:    shell="$HOME/.bashrc"
+                case */zsh:     shell="$HOME/.zshrc"
+                case */fish:    shell="$HOME/.config/fish/config.fish"
+                end
+
+                out=/usr/local/bin
+                dir_exists $out || mkdir -p $out
+
+                cp $0 $out/shsh
+                chmod +x $out/shsh
+                printf "installed $out/shsh\n"
+
+                switch ":$PATH:"
+                case *":$out:"*
+                        # already in PATH
+                default
+                    printf "\nexport PATH=\"\$PATH:$out\"\n" >> $shell
+                    printf "added $out to PATH in $shell\n"
+                end
         case uninstall: printf "not implemented yet.\n"
-        
         default
                 printf "shsh v$VERSION\n\n"
                 printf "usage: shsh [command] [args...]\n\n"
