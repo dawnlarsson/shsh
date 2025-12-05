@@ -1,7 +1,6 @@
-#!/bin/sh
-VERSION="0.15.0"
+VERSION="0.20.0"
 
-TOOLKIT='
+RUNTIME='
 _shsh_sq=$(printf "\\047")
 _shsh_dq=$(printf "\\042")
 
@@ -158,7 +157,6 @@ map_set() {
   _shsh_check_name "$1" || return 1
   _shsh_check_name "$2" || return 1
   eval "__shsh_map_${1}_${2}=\"\$3\""
-  # track key if new
   eval "_mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
   if [ -z "$_mset_exists" ]; then
     eval "__shsh_map_${1}_${2}__exists=1"
@@ -176,7 +174,6 @@ map_keys() {
   _mk_i=0
   while [ "$_mk_i" -lt "$_mk_len" ]; do
     eval "_mk_key=\"\${__shsh_mapkeys_${1}_$_mk_i}\""
-    # skip deleted keys
     eval "_mk_exists=\"\${__shsh_map_${1}_${_mk_key}+x}\""
     [ -n "$_mk_exists" ] && array_add "$2" "$_mk_key"
     _mk_i=$((_mk_i + 1))
@@ -309,7 +306,7 @@ tokenize() {
         [ -n "$_tk_token" ] && { array_add "$_tk_out" "$_tk_token"; _tk_token=""; }
         array_add "$_tk_out" "$_tk_char"
         ;;
-      " " | "	")
+      " " | "")
         [ -n "$_tk_token" ] && { array_add "$_tk_out" "$_tk_token"; _tk_token=""; }
         ;;
       *)
@@ -381,9 +378,7 @@ is() {
       ;;
   esac
 }
-'
 
-TOOLKIT="$TOOLKIT"'
 ENDIAN=${ENDIAN:-0}
 
 _is_int() { case "$1" in ""|*[!0-9]*) case "$1" in 0x*|0X*) return 0;; *) return 1;; esac ;; *) return 0;; esac; }
@@ -484,334 +479,469 @@ bit_128() {
   done
 }
 '
+eval "$RUNTIME"
 
-_tl_escape() {
-  _te_in="$1" _te_out=""
-  while [ -n "$_te_in" ]; do
-    case "$_te_in" in
-      '"'*) _te_out="$_te_out\\\""; _te_in="${_te_in#?}" ;;
-      *'"'*) _te_out="$_te_out${_te_in%%'"'*}\\\""; _te_in="${_te_in#*'"'}" ;;
-      *) _te_out="$_te_out$_te_in"; _te_in="" ;;
-    esac
+block_stack=""
+single_line_if_active=0
+single_line_if_indent=""
+
+COLON_SPACE=":"
+COLON_SPACE="$COLON_SPACE "
+
+SEMICOLON_THEN=";"
+SEMICOLON_THEN="$SEMICOLON_THEN then"
+SEMICOLON_DO=";"
+SEMICOLON_DO="$SEMICOLON_DO do"
+
+push() { block_stack="$block_stack$1"; }
+pop()  { block_stack="${block_stack%?}"; }
+peek() { R="${block_stack#"${block_stack%?}"}"; }
+
+switch_first_case_stack=""
+switch_push_first() { switch_first_case_stack="${switch_first_case_stack}1"; }
+switch_pop_first()  { switch_first_case_stack="${switch_first_case_stack%?}"; }
+switch_is_first()   { str_ends "$switch_first_case_stack" "1"; }
+switch_set_not_first() { switch_first_case_stack="${switch_first_case_stack%?}0"; }
+
+is_comparison() {
+  case $1 in
+  *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
+    return 0
+  ;;
+  *)
+    return 1
+  ;;
+  esac
+}
+
+escape_quotes() {
+  _eq_in="$1" _eq_out=""
+  while str_contains "$_eq_in" '"'; do
+    str_before "$_eq_in" '"'; _eq_out="$_eq_out$R\\\""
+    str_after "$_eq_in" '"'; _eq_in="$R"
   done
+  R="$_eq_out$_eq_in"
+}
+
+emit_condition() {
+  keyword="$1" condition="$2" indent="$3" suffix="$4"
+  if is_comparison "$condition"; then
+    escape_quotes "$condition"
+    printf '%s\n' "${indent}${keyword} is \"$R\"${suffix}"
+  else
+    printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
+  fi
 }
 
 transform_line() {
-  _tl_line="$1"
-  _tl_stripped="${_tl_line#"${_tl_line%%[![:space:]]*}"}"
-  _tl_indent="${_tl_line%%"$_tl_stripped"}"
+  line="$1"
+  str_ltrim "$line"; stripped="$R"
+  str_indent "$line"; indent="$R"
   
-  if [ "$_t_sl_if" = "1" ]; then
-    case "$_tl_stripped" in
-      "elif "*": "*|"else:"*|"else: "*)
-        ;;
-      "elif "*|"else")
-        _t_sl_if=0
-        _t_if_depth=$((_t_if_depth + 1))
-        ;;
-      *)
-        printf '%s\n' "${_t_sl_indent}fi"
-        _t_sl_if=0
-        ;;
-    esac
+  if is "$single_line_if_active == 1"; then
+    continues_single_line=0
+    if is "\"$indent\" == \"$single_line_if_indent\""; then
+      if str_starts "$stripped" "elif "; then
+        continues_single_line=1
+      fi
+      if str_starts "$stripped" "else"; then
+        continues_single_line=1
+      fi
+    fi
+    
+    if is "$continues_single_line == 1"; then
+      converts_to_multiline=0
+      if str_starts "$stripped" "elif "; then
+        if ! str_contains "$stripped" "$COLON_SPACE"; then
+          converts_to_multiline=1
+        fi
+      fi
+      if is "\"$stripped\" == \"else\""; then
+        converts_to_multiline=1
+      fi
+      
+      if is "$converts_to_multiline == 1"; then
+        single_line_if_active=0
+        push i
+      fi
+    else
+      printf '%s\n' "${single_line_if_indent}fi"
+      single_line_if_active=0
+    fi
   fi
   
-  case "$_tl_stripped" in
-    "if "*": "*)
-      _tl_rest="${_tl_stripped#if }"
-      _tl_cond="${_tl_rest%%: *}"
-      _tl_stmt="${_tl_rest#*: }"
-      case "$_tl_cond" in
-        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
-          _tl_escape "$_tl_cond"
-          printf '%s\n' "${_tl_indent}if is \"$_te_out\"; then"
-          ;;
-        *) printf '%s\n' "${_tl_indent}if $_tl_cond; then" ;;
-      esac
-      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
-      _t_sl_if=1
-      _t_sl_indent="$_tl_indent"
-      ;;
-    "if "*)
-      case "$_tl_stripped" in
-        *";"*) printf '%s\n' "$_tl_line" ;;
-        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
-          _tl_expr="${_tl_stripped#if }"
-          _tl_escape "$_tl_expr"
-          printf '%s\n' "${_tl_indent}if is \"$_te_out\"; then"
-          ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_stripped}; then" ;;
-      esac
-      _t_if_depth=$((_t_if_depth + 1))
-      ;;
-    "elif "*": "*)
-      _tl_rest="${_tl_stripped#elif }"
-      _tl_cond="${_tl_rest%%: *}"
-      _tl_stmt="${_tl_rest#*: }"
-      case "$_tl_cond" in
-        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
-          _tl_escape "$_tl_cond"
-          printf '%s\n' "${_tl_indent}elif is \"$_te_out\"; then"
-          ;;
-        *) printf '%s\n' "${_tl_indent}elif $_tl_cond; then" ;;
-      esac
-      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
-      ;;
-    "elif "*)
-      case "$_tl_stripped" in
-        *";"*) printf '%s\n' "$_tl_line" ;;
-        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
-          _tl_expr="${_tl_stripped#elif }"
-          _tl_escape "$_tl_expr"
-          printf '%s\n' "${_tl_indent}elif is \"$_te_out\"; then"
-          ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_stripped}; then" ;;
-      esac
-      ;;
-    "else:"*|"else: "*)
-      _tl_stmt="${_tl_stripped#else:}"
-      _tl_stmt="${_tl_stmt# }"
-      printf '%s\n' "${_tl_indent}else"
-      printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
-      if [ "$_t_sl_if" = "1" ]; then
-        printf '%s\n' "${_tl_indent}fi"
-        _t_sl_if=0
+  case $stripped in
+  
+  "if "*)
+    str_after "$stripped" "if "; rest="$R"
+    if str_contains "$rest" "$COLON_SPACE"; then
+      str_before "$rest" "$COLON_SPACE"; condition="$R"
+      str_after "$rest" "$COLON_SPACE"; statement="$R"
+      emit_condition "if" "$condition" "$indent" "$SEMICOLON_THEN"
+      printf '%s\n' "${indent}  ${statement}"
+      single_line_if_active=1
+      single_line_if_indent="$indent"
+    elif str_contains "$stripped" "$SEMICOLON_THEN"; then
+      printf '%s\n' "$line"
+      push i
+    else
+      emit_condition "if" "$rest" "$indent" "$SEMICOLON_THEN"
+      push i
+    fi
+  
+  ;;
+  "elif "*)
+    str_after "$stripped" "elif "; rest="$R"
+    if str_contains "$rest" "$COLON_SPACE"; then
+      str_before "$rest" "$COLON_SPACE"; condition="$R"
+      str_after "$rest" "$COLON_SPACE"; statement="$R"
+      emit_condition "elif" "$condition" "$indent" "$SEMICOLON_THEN"
+      printf '%s\n' "${indent}  ${statement}"
+    elif str_contains "$stripped" "$SEMICOLON_THEN"; then
+      printf '%s\n' "$line"
+    else
+      emit_condition "elif" "$rest" "$indent" "$SEMICOLON_THEN"
+    fi
+  
+  ;;
+  "else:"*)
+    str_after "$stripped" "else:"; statement="$R"
+    str_ltrim "$statement"; statement="$R"
+    printf '%s\n' "${indent}else"
+    printf '%s\n' "${indent}  ${statement}"
+    if is "$single_line_if_active == 1"; then
+      printf '%s\n' "${indent}fi"
+      single_line_if_active=0
+    fi
+  
+  ;;
+  "else")
+    printf '%s\n' "${indent}else"
+  
+  ;;
+  "while "*)
+    str_after "$stripped" "while "; expression="$R"
+    if str_contains "$stripped" "$SEMICOLON_DO"; then
+      printf '%s\n' "$line"
+    else
+      emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
+    fi
+  
+  ;;
+  "for "*)
+    if str_contains "$stripped" "$SEMICOLON_DO"; then
+      printf '%s\n' "$line"
+    else
+      printf '%s\n' "${indent}${stripped}; do"
+    fi
+  
+  ;;
+  "done")
+    printf '%s\n' "${indent}done"
+  
+  ;;
+  "switch "*)
+    str_after "$stripped" "switch "; expression="$R"
+    printf '%s\n' "${indent}case $expression in"
+    push s
+    switch_push_first
+  
+  ;;
+  "case "*)
+    peek
+    if is "\"$R\" == \"s\""; then
+      str_after "$stripped" "case "; rest="$R"
+      
+      if ! switch_is_first; then
+        printf '%s\n' "${indent};;"
       fi
-      ;;
-    "else") printf '%s\n' "${_tl_indent}else" ;;
-    "while "*)
-      case "$_tl_stripped" in
-        *";"*) printf '%s\n' "$_tl_line" ;;
-        *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
-          _tl_expr="${_tl_stripped#while }"
-          _tl_escape "$_tl_expr"
-          printf '%s\n' "${_tl_indent}while is \"$_te_out\"; do"
-          ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_stripped}; do" ;;
-      esac
-      ;;
-    "for "*)
-      case "$_tl_stripped" in
-        *";"*) printf '%s\n' "$_tl_line" ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_stripped}; do" ;;
-      esac
-      ;;
-    "done") printf '%s\n' "${_tl_indent}done" ;;
-    "switch "*)
-      _tl_expr="${_tl_stripped#switch }"
-      printf '%s\n' "${_tl_indent}case $_tl_expr in"
-      _t_sw_depth=$((_t_sw_depth + 1))
-      eval "_t_sw_first_$_t_sw_depth=1"
-      ;;
-    "case "*)
-      if [ "$_t_sw_depth" -gt 0 ]; then
-        _tl_rest="${_tl_stripped#case }"
-        case "$_tl_rest" in
-          *": "*)
-            _tl_pattern="${_tl_rest%%: *}"
-            _tl_stmt="${_tl_rest#*: }"
-            eval "_t_first=\$_t_sw_first_$_t_sw_depth"
-            [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
-            printf '%s\n' "${_tl_indent}${_tl_pattern})"
-            printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
-            eval "_t_sw_first_$_t_sw_depth=0"
-            ;;
-          *)
-            eval "_t_first=\$_t_sw_first_$_t_sw_depth"
-            [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
-            printf '%s\n' "${_tl_indent}${_tl_rest})"
-            eval "_t_sw_first_$_t_sw_depth=0"
-            ;;
-        esac
+      switch_set_not_first
+      
+      if str_contains "$rest" "$COLON_SPACE"; then
+        str_before "$rest" "$COLON_SPACE"; maybe_pattern="$R"
+        str_after "$rest" "$COLON_SPACE"; maybe_statement="$R"
+        
+        is_single_line=0
+        if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
+          if is "\"$maybe_statement\" != \"\""; then
+            is_single_line=1
+          fi
+        else
+          str_ltrim "$maybe_statement"
+          if is "\"$R\" != \"\""; then
+            is_single_line=1
+          fi
+        fi
+        
+        if is "$is_single_line == 1"; then
+          printf '%s\n' "${indent}${maybe_pattern})"
+          printf '%s\n' "${indent}  ${maybe_statement}"
+        else
+          printf '%s\n' "${indent}${rest})"
+        fi
       else
-        printf '%s\n' "$_tl_line"
+        printf '%s\n' "${indent}${rest})"
       fi
-      ;;
-    "default:"*)
-      if [ "$_t_sw_depth" -gt 0 ]; then
-        _tl_stmt="${_tl_stripped#default:}"
-        _tl_stmt="${_tl_stmt# }"
-        eval "_t_first=\$_t_sw_first_$_t_sw_depth"
-        [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
-        printf '%s\n' "${_tl_indent}*)"
-        printf '%s\n' "${_tl_indent}  ${_tl_stmt}"
-        eval "_t_sw_first_$_t_sw_depth=0"
-      else
-        printf '%s\n' "$_tl_line"
+    else
+      printf '%s\n' "$line"
+    fi
+  
+  ;;
+  "default:"*)
+    peek
+    if is "\"$R\" == \"s\""; then
+      if ! switch_is_first; then
+        printf '%s\n' "${indent};;"
       fi
-      ;;
-    "default")
-      if [ "$_t_sw_depth" -gt 0 ]; then
-        eval "_t_first=\$_t_sw_first_$_t_sw_depth"
-        [ "$_t_first" = "1" ] || printf '%s\n' "${_tl_indent};;"
-        printf '%s\n' "${_tl_indent}*)"
-        eval "_t_sw_first_$_t_sw_depth=0"
-      else
-        printf '%s\n' "$_tl_line"
+      switch_set_not_first
+      str_after "$stripped" "default:"; statement="$R"
+      str_ltrim "$statement"; statement="$R"
+      printf '%s\n' "${indent}*)"
+      if is "\"$statement\" != \"\""; then
+        printf '%s\n' "${indent}  ${statement}"
       fi
-      ;;
-    "end")
-      if [ "$_t_sw_depth" -gt 0 ]; then
-        printf '%s\n' "${_tl_indent};;"
-        printf '%s\n' "${_tl_indent}esac"
-        _t_sw_depth=$((_t_sw_depth - 1))
-      else
-        printf '%s\n' "${_tl_indent}fi"
-        _t_if_depth=$((_t_if_depth - 1))
+    else
+      printf '%s\n' "$line"
+    fi
+  
+  ;;
+  "default")
+    peek
+    if is "\"$R\" == \"s\""; then
+      if ! switch_is_first; then
+        printf '%s\n' "${indent};;"
       fi
+      switch_set_not_first
+      printf '%s\n' "${indent}*)"
+    else
+      printf '%s\n' "$line"
+    fi
+  
+  ;;
+  "end")
+    peek
+    if is "\"$R\" == \"s\""; then
+      printf '%s\n' "${indent};;"
+      printf '%s\n' "${indent}esac"
+      switch_pop_first
+      pop
+    elif is "\"$R\" == \"i\""; then
+      printf '%s\n' "${indent}fi"
+      pop
+    fi
+  
+  ;;
+  *"++")
+    str_before "$stripped" "++"; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *++) 
-      _tl_var="${_tl_stripped%++}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} + 1))" ;;
-      esac
+      *)
+        printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
+    ;;
+    esac
+  
+  ;;
+  *"--")
+    str_before "$stripped" "--"; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *--)
-      _tl_var="${_tl_stripped%--}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *) printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} - 1))" ;;
-      esac
+      *)
+        printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
+    ;;
+    esac
+  
+  ;;
+  *" += "*)
+    str_before "$stripped" " += "; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *" += "*)
-      _tl_var="${_tl_stripped%% +=*}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *)
-          _tl_val="${_tl_stripped#*+= }"
-          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} + ${_tl_val}))"
-          ;;
-      esac
+      *)
+        str_after "$stripped" " += "; value="$R"
+        printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
+    ;;
+    esac
+  
+  ;;
+  *" -= "*)
+    str_before "$stripped" " -= "; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *" -= "*)
-      _tl_var="${_tl_stripped%% -=*}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *)
-          _tl_val="${_tl_stripped#*-= }"
-          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} - ${_tl_val}))"
-          ;;
-      esac
+      *)
+        str_after "$stripped" " -= "; value="$R"
+        printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
+    ;;
+    esac
+  
+  ;;
+  *" *= "*)
+    str_before "$stripped" " *= "; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *" *= "*)
-      _tl_var="${_tl_stripped%% \*=*}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *)
-          _tl_val="${_tl_stripped#**= }"
-          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} * ${_tl_val}))"
-          ;;
-      esac
+      *)
+        str_after "$stripped" " *= "; value="$R"
+        printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
+    ;;
+    esac
+  
+  ;;
+  *" /= "*)
+    str_before "$stripped" " /= "; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *" /= "*)
-      _tl_var="${_tl_stripped%% /=*}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *)
-          _tl_val="${_tl_stripped#*/= }"
-          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} / ${_tl_val}))"
-          ;;
-      esac
+      *)
+        str_after "$stripped" " /= "; value="$R"
+        printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
+    ;;
+    esac
+  
+  ;;
+  *" %= "*)
+    str_before "$stripped" " %= "; variable="$R"
+    case $variable in
+      *[!a-zA-Z0-9_]*|"")
+        printf '%s\n' "$line"
       ;;
-    *" %= "*)
-      _tl_var="${_tl_stripped%% %=*}"
-      case "$_tl_var" in
-        *[!a-zA-Z0-9_]*|"") printf '%s\n' "$_tl_line" ;;
-        *)
-          _tl_val="${_tl_stripped#*%= }"
-          printf '%s\n' "${_tl_indent}${_tl_var}=\$((${_tl_var} % ${_tl_val}))"
-          ;;
-      esac
-      ;;
-    *) printf '%s\n' "$_tl_line" ;;
+      *)
+        str_after "$stripped" " %= "; value="$R"
+        printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
+    ;;
+    esac
+  
+  ;;
+  *)
+    printf '%s\n' "$line"
+  
+  ;;
   esac
 }
 
 transform() {
-  _t_sw_depth=0 _t_if_depth=0 _t_sl_if=0 _t_sl_indent=""
-  while IFS= read -r _t_line || [ -n "$_t_line" ]; do
-    transform_line "$_t_line"
-  done
-  [ "$_t_sl_if" = "1" ] && printf '%s\n' "${_t_sl_indent}fi"
-}
-
-usage() {
-  cat <<EOF
-shsh v$VERSION
-
-usage: shsh [command] [args...]
-
-  <script>       run script
-  -c 'code'      run inline code
-  -e <script>    emit standalone POSIX
-  -t [script]    transform (file or stdin)
-  -              read from stdin
-  install        install to system
-  uninstall      remove from system
-  version        show version
-EOF
-  exit 1
-}
-
-detect_shell_rc() {
-  case "${SHELL:-/bin/sh}" in
-    */zsh)  printf '%s\n' "$HOME/.zshrc" ;;
-    */bash) [ -f "$HOME/.bash_profile" ] && printf '%s\n' "$HOME/.bash_profile" || printf '%s\n' "$HOME/.bashrc" ;;
-    */fish) printf '%s\n' "$HOME/.config/fish/config.fish" ;;
-    *)      printf '%s\n' "$HOME/.profile" ;;
-  esac
-}
-
-do_install() {
-  if [ -w /usr/local/bin ]; then
-    dest=/usr/local/bin/shsh
-  else
-    mkdir -p "$HOME/.local/bin"
-    dest="$HOME/.local/bin/shsh"
-  fi
-  cp "$0" "$dest" && chmod +x "$dest" && printf '%s\n' "installed: $dest"
+  block_stack=""
+  single_line_if_active=0
+  single_line_if_indent=""
+  switch_first_case_stack=""
   
-  case ":$PATH:" in
-    *":$(dirname "$dest"):"*) ;;
-    *)
-      rc=$(detect_shell_rc)
-      grep -qF '.local/bin' "$rc" 2>/dev/null || {
-        printf '%s\n' '# shsh' >> "$rc"
-        printf '%s\n' 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
-        printf '%s\n' "added PATH to $rc"
-      }
-      printf '%s\n' "run: exec \$SHELL"
-      ;;
-  esac
-}
-
-do_uninstall() {
-  for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
-    [ -f "$loc" ] && rm "$loc" && printf '%s\n' "removed: $loc"
+  while IFS= read -r current_line || [ -n "$current_line" ]; do
+    transform_line "$current_line"
   done
+  
+  if is "$single_line_if_active == 1"; then
+    printf '%s\n' "${single_line_if_indent}fi"
+  fi
 }
 
 run_file() {
-  eval "$TOOLKIT"
-  eval "$(transform < "$1")"
+  script="$1"
+  shift
+  eval "$RUNTIME"
+  eval "$(transform < "$script")"
 }
 
 run_code() {
-  eval "$TOOLKIT"
+  eval "$RUNTIME"
   eval "$(printf '%s\n' "$1" | transform)"
 }
 
-[ $# -eq 0 ] && usage
+info() {
+    printf '%s\n' "shsh v$VERSION"
+    printf '%s\n' ""
+    printf '%s\n' "usage: shsh [command] [args...]"
+    printf '%s\n' ""
+    printf '%s\n' "  <script>       run script"
+    printf '%s\n' "  -c 'code'      run inline code"
+    printf '%s\n' "  -t [script]    transform (file or stdin)"
+    printf '%s\n' "  -              read from stdin"
+    printf '%s\n' "  install        install to system"
+    printf '%s\n' "  uninstall      remove from system"
+    printf '%s\n' "  version        show version"
+}
 
-case "$1" in
-  -c)        run_code "$2" ;;
-  -e)        printf '%s\n' "#!/bin/sh"; printf '%s\n' "$TOOLKIT"; transform < "$2" ;;
-  -t)        if [ -n "$2" ]; then transform < "$2"; else transform; fi ;;
-  -)         eval "$TOOLKIT"; eval "$(cat | transform)" ;;
-  install)   do_install ;;
-  uninstall) do_uninstall ;;
-  version)   printf '%s\n' "shsh $VERSION" ;;
-  -*)        usage ;;
-  *)         run_file "$1" ;;
+case $1 in
+  -c)
+           run_code "$2"
+  ;;
+  -t)
+    if is "\"$2\" == \"\""; then
+      transform
+    else
+      transform < "$2"
+    fi
+  ;;
+  -v)
+           printf '%s\n' "shsh $VERSION"
+  ;;
+  version)
+      printf '%s\n' "shsh $VERSION"
+  ;;
+  -)
+            eval "$RUNTIME"; eval "$(transform)"
+  ;;
+  install)
+    shell="$HOME/.profile"
+    case $SHELL in
+      */bash)
+        if [ -f "$HOME/.bash_profile" ]; then
+          shell="$HOME/.bash_profile"
+        else
+          shell="$HOME/.bashrc"
+        fi
+      ;;
+      */zsh)
+         shell="$HOME/.zshrc"
+      ;;
+      */fish)
+        shell="$HOME/.config/fish/config.fish"
+    ;;
+    esac
+
+    if [ -w /usr/local/bin ]; then
+      dest=/usr/local/bin/shsh
+    else
+      mkdir -p "$HOME/.local/bin"
+      dest="$HOME/.local/bin/shsh"
+    fi
+
+    cp "$0" "$dest" && chmod +x "$dest" && printf '%s\n' "installed: $dest"
+
+    case ":$PATH:" in
+      *":$(dirname "$dest"):"*)
+      ;;
+      *)
+        grep -qF '.local/bin' "$shell" 2>/dev/null || {
+          printf '%s\n' '# shsh' >> "$shell"
+          printf '%s\n' 'export PATH="$HOME/.local/bin:$PATH"' >> "$shell"
+          printf '%s\n' "added PATH to $shell"
+        }
+        printf '%s\n' "run: exec \$SHELL"
+    ;;
+    esac
+  ;;
+  uninstall)
+    for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
+      if [ -f "$loc" ]; then
+        rm "$loc" && printf '%s\n' "removed: $loc"
+      fi
+    done
+  ;;
+  "")
+    info
+  ;;
+  -*)
+    info
+  ;;
+  *)
+    run_file "$@"
+;;
 esac

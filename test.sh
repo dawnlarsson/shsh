@@ -2090,7 +2090,230 @@ else
   fail "str_contains extended ascii"
 end
 
+echo ""
+echo "=== Nested Blocks ==="
+
+_nb_result=""
+_nb_cmd="start"
+_nb_verbose=1
+switch $_nb_cmd
+case start
+  if $_nb_verbose == 1
+    _nb_result="verbose_start"
+  else
+    _nb_result="quiet_start"
+  end
+case stop
+  _nb_result="stop"
+end
+assert_eq "if inside switch" "$_nb_result" "verbose_start"
+
+_nb2_result=""
+_nb2_level="debug"
+_nb2_trace=0
+_nb2_debug=1
+switch $_nb2_level
+case debug
+  if $_nb2_trace == 1
+    _nb2_result="trace"
+  elif $_nb2_debug == 1
+    _nb2_result="debug"
+  else
+    _nb2_result="other"
+  end
+case info
+  _nb2_result="info"
+end
+assert_eq "if/elif/else inside switch" "$_nb2_result" "debug"
+
+_nb3_a=""
+_nb3_b=""
+_nb3_mode="both"
+switch $_nb3_mode
+case both
+  if 1 == 1
+    _nb3_a="first"
+  end
+  if 2 == 2
+    _nb3_b="second"
+  end
+case neither
+  _nb3_a="none"
+end
+assert_eq "multiple ifs in switch (a)" "$_nb3_a" "first"
+assert_eq "multiple ifs in switch (b)" "$_nb3_b" "second"
+
+_nb4_result=""
+_nb4_enabled=1
+_nb4_type="foo"
+if $_nb4_enabled == 1
+  switch $_nb4_type
+  case foo
+    _nb4_result="enabled_foo"
+  case bar
+    _nb4_result="enabled_bar"
+  end
+end
+assert_eq "switch inside if" "$_nb4_result" "enabled_foo"
+
+_nb5_result=""
+_nb5_outer=1
+_nb5_sel="a"
+_nb5_inner=1
+if $_nb5_outer == 1
+  switch $_nb5_sel
+  case a
+    if $_nb5_inner == 1
+      _nb5_result="deep_a_inner"
+    else
+      _nb5_result="deep_a_outer"
+    end
+  case b
+    _nb5_result="deep_b"
+  end
+end
+assert_eq "if>switch>if nesting" "$_nb5_result" "deep_a_inner"
+
+_nb6_result=""
+_nb6_outer="x"
+_nb6_inner="y"
+switch $_nb6_outer
+case x
+  switch $_nb6_inner
+  case y
+    _nb6_result="x_y"
+  case z
+    _nb6_result="x_z"
+  end
+case w
+  _nb6_result="w"
+end
+assert_eq "switch inside switch" "$_nb6_result" "x_y"
+
+_nb7_result=""
+_nb7_a="p"
+_nb7_b="q"
+_nb7_c=1
+switch $_nb7_a
+case p
+  switch $_nb7_b
+  case q
+    if $_nb7_c == 1
+      _nb7_result="p_q_true"
+    else
+      _nb7_result="p_q_false"
+    end
+  end
+end
+assert_eq "if>switch>switch nesting" "$_nb7_result" "p_q_true"
+
+_nb8_result=0
+_nb8_mode="loop"
+_nb8_count=3
+switch $_nb8_mode
+case loop
+  while $_nb8_count > 0
+    _nb8_result=$((_nb8_result + 1))
+    _nb8_count=$((_nb8_count - 1))
+  done
+case single
+  _nb8_result=999
+end
+assert_eq "while inside switch" "$_nb8_result" "3"
+
+_nb9_result=""
+_nb9_mode="iterate"
+switch $_nb9_mode
+case iterate
+  for _nb9_i in a b c
+    _nb9_result="${_nb9_result}${_nb9_i}"
+  done
+case skip
+  _nb9_result="skipped"
+end
+assert_eq "for inside switch" "$_nb9_result" "abc"
+
+_nb10_result=0
+_nb10_mode="conditional_loop"
+_nb10_enabled=1
+_nb10_n=2
+switch $_nb10_mode
+case conditional_loop
+  if $_nb10_enabled == 1
+    while $_nb10_n > 0
+      _nb10_result=$((_nb10_result + 1))
+      _nb10_n=$((_nb10_n - 1))
+    done
+  end
+end
+assert_eq "if>while inside switch" "$_nb10_result" "2"
+
+_nb11_result=""
+_nb11_a=1
+_nb11_b="x"
+_nb11_c=1
+_nb11_d="y"
+if $_nb11_a == 1
+  switch $_nb11_b
+  case x
+    if $_nb11_c == 1
+      switch $_nb11_d
+      case y
+        _nb11_result="a1_bx_c1_dy"
+      end
+    end
+  end
+end
+assert_eq "if>switch>if>switch" "$_nb11_result" "a1_bx_c1_dy"
+
+_nb12_result=""
+_nb12_outer=1
+_nb12_inner=0
+if $_nb12_outer == 1
+  if $_nb12_inner == 1: _nb12_result="inner_true"
+else
+  _nb12_result="outer_false"
+end
+assert_eq "single-line if then outer else" "$_nb12_result" ""
+
+_nb13_result=""
+_nb13_outer=0
+_nb13_inner=1
+if $_nb13_outer == 1
+  if $_nb13_inner == 1: _nb13_result="inner_true"
+else
+  _nb13_result="outer_false"
+end
+assert_eq "single-line if, outer else taken" "$_nb13_result" "outer_false"
+
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
+
+echo ""
+echo "=== Script Argument Passing ==="
+
+printf 'printf "%%s\\n" "$@"\n' > /tmp/shsh_args_test.shsh
+
+_args_out="$(shsh /tmp/shsh_args_test.shsh one)"
+assert_eq "single arg passed" "$_args_out" "one"
+
+_args_out="$(shsh /tmp/shsh_args_test.shsh one two three | tr '\n' ',')"
+assert_eq "multi args passed" "$_args_out" "one,two,three,"
+
+_args_out="$(shsh /tmp/shsh_args_test.shsh "hello world")"
+assert_eq "arg with space" "$_args_out" "hello world"
+
+_args_out="$(shsh /tmp/shsh_args_test.shsh)"
+assert_eq "no args (empty)" "$_args_out" ""
+
+printf 'printf "count:%%s\\n" "$#"\n' > /tmp/shsh_argc_test.shsh
+_argc_out="$(shsh /tmp/shsh_argc_test.shsh a b c d e)"
+assert_eq "arg count 5" "$_argc_out" "count:5"
+
+printf 'printf "first:%%s second:%%s\\n" "$1" "$2"\n' > /tmp/shsh_posarg_test.shsh
+_posarg_out="$(shsh /tmp/shsh_posarg_test.shsh alpha beta gamma)"
+assert_eq "positional args \$1 \$2" "$_posarg_out" "first:alpha second:beta"
+
+rm -f /tmp/shsh_args_test.shsh /tmp/shsh_argc_test.shsh /tmp/shsh_posarg_test.shsh
 
 echo ""
 echo "========================================"
