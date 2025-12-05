@@ -70,7 +70,7 @@ end
 ```sh
 while $i < 10
   echo $i
-  i=$((i + 1))
+  i++
 done
 
 for x in a b c

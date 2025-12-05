@@ -701,7 +701,7 @@ run_code() {
 case "$1" in
   -c)        run_code "$2" ;;
   -e)        printf '%s\n' "#!/bin/sh"; printf '%s\n' "$TOOLKIT"; transform < "$2" ;;
-  -t)        [ -n "$2" ] && transform < "$2" || transform ;;
+  -t)        if [ -n "$2" ]; then transform < "$2"; else transform; fi ;;
   -)         eval "$TOOLKIT"; eval "$(cat | transform)" ;;
   install)   do_install ;;
   uninstall) do_uninstall ;;

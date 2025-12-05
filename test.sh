@@ -1282,6 +1282,47 @@ done
 assert_eq "single-line switch in loop" "$_sw_loop" "ABC"
 
 echo ""
+echo "=== CLI edge cases ==="
+
+if [ -f "${0%/*}/shsh.sh" ]; then
+  _shsh_path="${0%/*}/shsh.sh"
+elif [ -f "/usr/local/bin/shsh" ]; then
+  _shsh_path="/usr/local/bin/shsh"
+else
+  _shsh_path="shsh"
+end
+_test_file="/tmp/shsh_cli_test_$$.shsh"
+printf '%s\n' 'x=1' > "$_test_file"
+_transform_out=$("$_shsh_path" -t "$_test_file" 2>&1)
+rm -f "$_test_file"
+if "$_transform_out" == "x=1"
+  pass "-t with file doesn't hang"
+else
+  fail "-t with file doesn't hang (got: '$_transform_out')"
+end
+
+_dash_out=$(printf "%s" "-")
+if "$_dash_out" == "-"
+  pass "printf dash works"
+else
+  fail "printf dash works (got: '$_dash_out')"
+end
+
+_dashes_out=$(printf "%s" "--")
+if "$_dashes_out" == "--"
+  pass "printf double dash works"
+else
+  fail "printf double dash works (got: '$_dashes_out')"
+end
+
+_dashopt_out=$(printf "%s" "-d")
+if "$_dashopt_out" == "-d"
+  pass "printf dash-letter works"
+else
+  fail "printf dash-letter works (got: '$_dashopt_out')"
+end
+
+echo ""
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
 
 echo ""
