@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.22.0"
+VERSION="0.23.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -505,6 +505,37 @@ switch_pop_first()  { switch_first_case_stack="${switch_first_case_stack%?}"; }
 switch_is_first()   { str_ends "$switch_first_case_stack" "1"; }
 switch_set_not_first() { switch_first_case_stack="${switch_first_case_stack%?}0"; }
 
+try_depth=0
+try_depth_inc() { try_depth=$((try_depth + 1)); }
+try_depth_dec() { try_depth=$((try_depth - 1)); }
+
+in_try_block() {
+  case "$block_stack" in
+    *t*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+current_try_depth() {
+  _ctd_s="$block_stack" _ctd_n=0
+  while [ -n "$_ctd_s" ]; do
+    case "$_ctd_s" in
+      t*) _ctd_n=$((_ctd_n + 1)) ;;
+    esac
+    _ctd_s="${_ctd_s#?}"
+  done
+  R=$_ctd_n
+}
+
+emit_with_try_check() {
+  if in_try_block; then
+    current_try_depth
+    printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$1" "$R" "$R"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 is_comparison() {
   case $1 in
   *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
@@ -580,7 +611,7 @@ transform_line() {
       str_before "$rest" "$COLON_SPACE"; condition="$R"
       str_after "$rest" "$COLON_SPACE"; statement="$R"
       emit_condition "if" "$condition" "$indent" "$SEMICOLON_THEN"
-      printf '%s\n' "${indent}  ${statement}"
+      emit_with_try_check "${indent}  ${statement}"
       single_line_if_active=1
       single_line_if_indent="$indent"
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
@@ -598,7 +629,7 @@ transform_line() {
       str_before "$rest" "$COLON_SPACE"; condition="$R"
       str_after "$rest" "$COLON_SPACE"; statement="$R"
       emit_condition "elif" "$condition" "$indent" "$SEMICOLON_THEN"
-      printf '%s\n' "${indent}  ${statement}"
+      emit_with_try_check "${indent}  ${statement}"
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
       printf '%s\n' "$line"
     else
@@ -610,7 +641,7 @@ transform_line() {
     str_after "$stripped" "else:"; statement="$R"
     str_ltrim "$statement"; statement="$R"
     printf '%s\n' "${indent}else"
-    printf '%s\n' "${indent}  ${statement}"
+    emit_with_try_check "${indent}  ${statement}"
     if is "$single_line_if_active == 1"; then
       printf '%s\n' "${indent}fi"
       single_line_if_active=0
@@ -627,8 +658,12 @@ transform_line() {
       str_before "$expression" "$COLON_SPACE"; condition="$R"
       str_after "$expression" "$COLON_SPACE"; statement="$R"
       emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
-      printf '%s\n' "${indent}  ${statement}"
+      emit_with_try_check "${indent}  ${statement}"
       printf '%s\n' "${indent}done"
+      if in_try_block; then
+        current_try_depth
+        printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
+      fi
     elif str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
     else
@@ -646,6 +681,28 @@ transform_line() {
     ;;
   "done")
     printf '%s\n' "${indent}done"
+    if in_try_block; then
+      current_try_depth
+      printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
+    fi
+  
+    ;;
+  "try")
+    try_depth_inc
+    printf '%s\n' "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do"
+    push t
+  
+    ;;
+  "catch")
+    peek
+    if is "\"$R\" == \"t\""; then
+      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
+      printf '%s\n' "${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth"
+      pop
+      push c
+    else
+      printf '%s\n' "$line"
+    fi
   
     ;;
   "switch "*)
@@ -735,6 +792,14 @@ transform_line() {
       pop
     elif is "\"$R\" == \"i\""; then
       printf '%s\n' "${indent}fi"
+      pop
+    elif is "\"$R\" == \"c\""; then
+      printf '%s\n' "${indent}fi"
+      try_depth_dec
+      pop
+    elif is "\"$R\" == \"t\""; then
+      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
+      try_depth_dec
       pop
     fi
   
@@ -829,7 +894,7 @@ transform_line() {
   
     ;;
   *)
-    printf '%s\n' "$line"
+    emit_with_try_check "$line"
   
     ;;
   esac
@@ -840,6 +905,7 @@ transform() {
   single_line_if_active=0
   single_line_if_indent=""
   switch_first_case_stack=""
+  try_depth=0
   
   while IFS= read -r current_line || [ -n "$current_line" ]; do
     transform_line "$current_line"

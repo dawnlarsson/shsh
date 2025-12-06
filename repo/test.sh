@@ -1,5 +1,17 @@
 PASS=0 FAIL=0
 
+_test_script="repo/test.sh"
+if [ -f "./shsh.sh" ]; then
+  _shsh="./shsh.sh"
+  _shsh_src="./shsh.shsh"
+elif [ -f "../shsh.sh" ]; then
+  _shsh="../shsh.sh"
+  _shsh_src="../shsh.shsh"
+else
+  _shsh="shsh"
+  _shsh_src="shsh.shsh"
+end
+
 assert_eq() {
   _aeq_name="$1" _aeq_got="$2" _aeq_want="$3"
   if "$_aeq_got" == "$_aeq_want"
@@ -1284,8 +1296,8 @@ assert_eq "single-line switch in loop" "$_sw_loop" "ABC"
 echo ""
 echo "=== CLI edge cases ==="
 
-if [ -f "${0%/*}/shsh.sh" ]; then
-  _shsh_path="${0%/*}/shsh.sh"
+if [ -f "${0%/*}/../shsh.sh" ]; then
+  _shsh_path="${0%/*}/../shsh.sh"
 elif [ -f "/usr/local/bin/shsh" ]; then
   _shsh_path="/usr/local/bin/shsh"
 else
@@ -2293,24 +2305,24 @@ echo "=== Script Argument Passing ==="
 
 printf 'printf "%%s\\n" "$@"\n' > /tmp/shsh_args_test.shsh
 
-_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh one)"
+_args_out="$(sh "$_shsh" /tmp/shsh_args_test.shsh one)"
 assert_eq "single arg passed" "$_args_out" "one"
 
-_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh one two three | tr '\n' ',')"
+_args_out="$(sh "$_shsh" /tmp/shsh_args_test.shsh one two three | tr '\n' ',')"
 assert_eq "multi args passed" "$_args_out" "one,two,three,"
 
-_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh "hello world")"
+_args_out="$(sh "$_shsh" /tmp/shsh_args_test.shsh "hello world")"
 assert_eq "arg with space" "$_args_out" "hello world"
 
-_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh)"
+_args_out="$(sh "$_shsh" /tmp/shsh_args_test.shsh)"
 assert_eq "no args (empty)" "$_args_out" ""
 
 printf 'printf "count:%%s\\n" "$#"\n' > /tmp/shsh_argc_test.shsh
-_argc_out="$(./shsh.sh /tmp/shsh_argc_test.shsh a b c d e)"
+_argc_out="$(sh "$_shsh" /tmp/shsh_argc_test.shsh a b c d e)"
 assert_eq "arg count 5" "$_argc_out" "count:5"
 
 printf 'printf "first:%%s second:%%s\\n" "$1" "$2"\n' > /tmp/shsh_posarg_test.shsh
-_posarg_out="$(./shsh.sh /tmp/shsh_posarg_test.shsh alpha beta gamma)"
+_posarg_out="$(sh "$_shsh" /tmp/shsh_posarg_test.shsh alpha beta gamma)"
 assert_eq "positional args \$1 \$2" "$_posarg_out" "first:alpha second:beta"
 
 rm -f /tmp/shsh_args_test.shsh /tmp/shsh_argc_test.shsh /tmp/shsh_posarg_test.shsh
@@ -2325,7 +2337,7 @@ switch $x
   case b: echo b
 end
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_switch_compile.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_compile.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch compilation produces valid shell"
 else
@@ -2344,7 +2356,7 @@ switch $outer
     echo b
 end
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_nested_switch.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_nested_switch.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "nested switch compilation produces valid shell"
 else
@@ -2366,7 +2378,7 @@ switch $a
   case 2: echo 2
 end
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_3level_switch.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_3level_switch.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "3-level nested switch compilation valid"
 else
@@ -2380,7 +2392,7 @@ switch $x
   default: echo other
 end
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_switch_default.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_default.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch with default compilation valid"
 else
@@ -2396,7 +2408,7 @@ if $cond == 1
   end
 end
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_switch_in_if.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_in_if.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch inside if compilation valid"
 else
@@ -2409,7 +2421,7 @@ i=0
 while $i < 3: i=$((i + 1))
 echo done
 SHSH
-_compiled="$(./shsh.sh -t /tmp/shsh_while_colon.shsh)"
+_compiled="$(sh "$_shsh" -t /tmp/shsh_while_colon.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "single-line while compilation valid"
 else
@@ -2428,7 +2440,7 @@ for x in a b c
 done
 echo "$result"
 SHSH
-_run_out="$(./shsh.sh /tmp/shsh_switch_run.shsh)"
+_run_out="$(sh "$_shsh" /tmp/shsh_switch_run.shsh)"
 assert_eq "compiled switch runs correctly" "$_run_out" "ABX"
 
 # Test nested switch runs correctly
@@ -2448,13 +2460,13 @@ for o in a b
 done
 echo "$result"
 SHSH
-_nested_out="$(./shsh.sh /tmp/shsh_nested_run.shsh)"
+_nested_out="$(sh "$_shsh" /tmp/shsh_nested_run.shsh)"
 assert_eq "nested switch runs correctly" "$_nested_out" "axaybb"
 
 # Test bootstrap produces stable output (compile twice = same result)
-./shsh.sh -t src/shsh.shsh > /tmp/shsh_boot1.sh
+sh "$_shsh" -t $_shsh_src > /tmp/shsh_boot1.sh
 chmod +x /tmp/shsh_boot1.sh
-/tmp/shsh_boot1.sh -t src/shsh.shsh > /tmp/shsh_boot2.sh
+sh /tmp/shsh_boot1.sh -t $_shsh_src > /tmp/shsh_boot2.sh
 if diff -q /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh >/dev/null 2>&1
   pass "bootstrap produces stable output"
 else
@@ -2465,8 +2477,8 @@ end
 cat > /tmp/shsh_strip_test.shsh << 'SHSH'
 echo "simple"
 SHSH
-_strip_out="$(./shsh.sh -e /tmp/shsh_strip_test.shsh)"
-_full_out="$(./shsh.sh -E /tmp/shsh_strip_test.shsh)"
+_strip_out="$(sh "$_shsh" -e /tmp/shsh_strip_test.shsh)"
+_full_out="$(sh "$_shsh" -E /tmp/shsh_strip_test.shsh)"
 _strip_lines="$(printf '%s\n' "$_strip_out" | wc -l)"
 _full_lines="$(printf '%s\n' "$_full_out" | wc -l)"
 if $_strip_lines < $_full_lines
@@ -2482,7 +2494,7 @@ array_add items "b"
 array_len items
 echo "$R"
 SHSH
-./shsh.sh -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
+sh "$_shsh" -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
 _strip_run_out="$(sh /tmp/shsh_strip_run.sh)"
 assert_eq "stripped script runs correctly" "$_strip_run_out" "2"
 
@@ -2490,6 +2502,234 @@ rm -f /tmp/shsh_switch_compile.shsh /tmp/shsh_nested_switch.shsh /tmp/shsh_3leve
 rm -f /tmp/shsh_switch_default.shsh /tmp/shsh_switch_in_if.shsh /tmp/shsh_while_colon.shsh
 rm -f /tmp/shsh_switch_run.shsh /tmp/shsh_nested_run.shsh /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh
 rm -f /tmp/shsh_strip_test.shsh /tmp/shsh_strip_run.shsh /tmp/shsh_strip_run.sh
+
+echo ""
+echo "=== Try/Catch ==="
+
+# Basic try/catch - catches error
+_tc_basic=""
+try
+  _tc_basic="${_tc_basic}A"
+  false
+  _tc_basic="${_tc_basic}B"
+catch
+  _tc_basic="${_tc_basic}C"
+end
+_tc_basic="${_tc_basic}D"
+assert_eq "try/catch basic" "$_tc_basic" "ACD"
+
+# Try/catch - no error path
+_tc_noerr=""
+try
+  _tc_noerr="${_tc_noerr}A"
+  true
+  _tc_noerr="${_tc_noerr}B"
+catch
+  _tc_noerr="${_tc_noerr}C"
+end
+_tc_noerr="${_tc_noerr}D"
+assert_eq "try/catch no error" "$_tc_noerr" "ABD"
+
+# Try without catch - suppresses error
+_tc_nocatch=""
+try
+  _tc_nocatch="${_tc_nocatch}A"
+  false
+  _tc_nocatch="${_tc_nocatch}B"
+end
+_tc_nocatch="${_tc_nocatch}C"
+assert_eq "try without catch" "$_tc_nocatch" "AC"
+
+# Try without catch - no error
+_tc_nocatch2=""
+try
+  _tc_nocatch2="${_tc_nocatch2}A"
+  true
+  _tc_nocatch2="${_tc_nocatch2}B"
+end
+_tc_nocatch2="${_tc_nocatch2}C"
+assert_eq "try without catch no error" "$_tc_nocatch2" "ABC"
+
+# Nested try/catch - inner catches
+_tc_nest1=""
+try
+  _tc_nest1="${_tc_nest1}A"
+  try
+    _tc_nest1="${_tc_nest1}B"
+    false
+    _tc_nest1="${_tc_nest1}C"
+  catch
+    _tc_nest1="${_tc_nest1}D"
+  end
+  _tc_nest1="${_tc_nest1}E"
+catch
+  _tc_nest1="${_tc_nest1}F"
+end
+_tc_nest1="${_tc_nest1}G"
+assert_eq "nested try/catch inner" "$_tc_nest1" "ABDEG"
+
+# Nested try/catch - outer catches
+_tc_nest2=""
+try
+  _tc_nest2="${_tc_nest2}A"
+  try
+    _tc_nest2="${_tc_nest2}B"
+  catch
+    _tc_nest2="${_tc_nest2}C"
+  end
+  _tc_nest2="${_tc_nest2}D"
+  false
+  _tc_nest2="${_tc_nest2}E"
+catch
+  _tc_nest2="${_tc_nest2}F"
+end
+_tc_nest2="${_tc_nest2}G"
+assert_eq "nested try/catch outer" "$_tc_nest2" "ABDFG"
+
+# Try/catch with command that returns non-zero
+_tc_exit=""
+try
+  _tc_exit="${_tc_exit}A"
+  sh -c 'exit 5'
+  _tc_exit="${_tc_exit}B"
+catch
+  _tc_exit="${_tc_exit}C"
+end
+assert_eq "try/catch exit code" "$_tc_exit" "AC"
+
+# Try/catch with failing command in pipeline - last command matters
+_tc_pipe=""
+try
+  _tc_pipe="${_tc_pipe}A"
+  echo "test" | grep "test" > /dev/null
+  _tc_pipe="${_tc_pipe}B"
+catch
+  _tc_pipe="${_tc_pipe}C"
+end
+assert_eq "try/catch pipeline success" "$_tc_pipe" "AB"
+
+# Try/catch - multiple statements before failure
+_tc_multi=""
+try
+  _tc_multi="${_tc_multi}A"
+  _tc_multi="${_tc_multi}B"
+  _tc_multi="${_tc_multi}C"
+  false
+  _tc_multi="${_tc_multi}D"
+catch
+  _tc_multi="${_tc_multi}E"
+end
+assert_eq "try/catch multi statements" "$_tc_multi" "ABCE"
+
+# Try/catch inside if
+_tc_inif=""
+if true
+  try
+    _tc_inif="${_tc_inif}A"
+    false
+    _tc_inif="${_tc_inif}B"
+  catch
+    _tc_inif="${_tc_inif}C"
+  end
+end
+assert_eq "try/catch inside if" "$_tc_inif" "AC"
+
+# Try/catch inside while
+_tc_inwhile=""
+_tc_count=0
+while $_tc_count < 2
+  try
+    _tc_inwhile="${_tc_inwhile}A"
+    if $_tc_count == 0: false
+    _tc_inwhile="${_tc_inwhile}B"
+  catch
+    _tc_inwhile="${_tc_inwhile}C"
+  end
+  _tc_count++
+done
+assert_eq "try/catch inside while" "$_tc_inwhile" "ACAB"
+
+# If inside try
+_tc_ifinside=""
+try
+  _tc_ifinside="${_tc_ifinside}A"
+  if true
+    _tc_ifinside="${_tc_ifinside}B"
+    false
+    _tc_ifinside="${_tc_ifinside}C"
+  end
+  _tc_ifinside="${_tc_ifinside}D"
+catch
+  _tc_ifinside="${_tc_ifinside}E"
+end
+assert_eq "if inside try" "$_tc_ifinside" "ABE"
+
+# While inside try
+_tc_whileinside=""
+try
+  _tc_whileinside="${_tc_whileinside}A"
+  _tc_wi=0
+  while $_tc_wi < 3
+    _tc_whileinside="${_tc_whileinside}B"
+    _tc_wi++
+    if $_tc_wi == 2: false
+  done
+  _tc_whileinside="${_tc_whileinside}C"
+catch
+  _tc_whileinside="${_tc_whileinside}D"
+end
+assert_eq "while inside try" "$_tc_whileinside" "ABBD"
+
+# Triple nested try
+_tc_triple=""
+try
+  _tc_triple="${_tc_triple}A"
+  try
+    _tc_triple="${_tc_triple}B"
+    try
+      _tc_triple="${_tc_triple}C"
+      false
+      _tc_triple="${_tc_triple}D"
+    catch
+      _tc_triple="${_tc_triple}E"
+    end
+    _tc_triple="${_tc_triple}F"
+  catch
+    _tc_triple="${_tc_triple}G"
+  end
+  _tc_triple="${_tc_triple}H"
+catch
+  _tc_triple="${_tc_triple}I"
+end
+assert_eq "triple nested try" "$_tc_triple" "ABCEFH"
+
+# Catch block can have its own logic
+_tc_catchlogic=""
+try
+  false
+catch
+  if true
+    _tc_catchlogic="caught"
+  end
+end
+assert_eq "catch with logic" "$_tc_catchlogic" "caught"
+
+# Variable set in try is visible after
+_tc_varscope=""
+try
+  _tc_varscope="set"
+catch
+  _tc_varscope="error"
+end
+assert_eq "try variable scope" "$_tc_varscope" "set"
+
+# Error code captured
+try
+  sh -c 'exit 42'
+catch
+  _tc_errcode="$error"
+end
+assert_eq "error code captured" "$_tc_errcode" "42"
 
 echo ""
 echo "========================================"

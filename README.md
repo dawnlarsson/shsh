@@ -1,7 +1,22 @@
 # shsh
-Arrays, Maps & modern syntax for POSIX shells.
+Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-self hosted in itself! passing all 404 tests
+Passing all 421 tests.
+
+- **Clean Syntax** — `if`/`elif`/`else`/`end`, `switch`/`case`/`default`/`end`, `try`/`catch`/`end`
+- **Comparisons** — `==`, `!=`, `<`, `>`, `<=`, `>=` for strings and numbers
+- **Arithmetic** — `i++`, `i--`, `i += 5`, `i -= 3`, `i *= 2`, `i /= 4`, `i %= 3`
+- **Single-line Forms** — `if $x > 0: echo "yes"`, `case a: run_a`
+- **Try/Catch** — Error handling with `try`/`catch`/`end` blocks
+- **Arrays** — `array_add`, `array_get`, `array_set`, `array_len`, `array_for`, `array_delete`
+- **Maps** — `map_set`, `map_get`, `map_has`, `map_for`, `map_keys`, `map_delete`
+- **Strings** — `str_starts`, `str_ends`, `str_contains`, `str_before`, `str_after`, `str_trim`
+- **Files** — `file_read`, `file_write`, `file_lines`, `file_each`, `file_exists`, `dir_exists`
+- **Defaults** — `default var "value"`, `default_unset var "value"`
+- **Binary Output** — `bit_8`, `bit_16`, `bit_32`, `bit_64`, `bit_128` for raw byte writing
+- **Tokenizer** — `tokenize` for parsing s-expressions and quoted strings
+- **Self-hosting** — shsh is written in shsh
+- **Standalone Emit** — Generate dependency-free POSIX scripts with `shsh -e` & automatic tree-shaking
 
 ### Install
 ```sh
@@ -23,7 +38,7 @@ shsh -t script.sh        # transform only (no toolkit)
 ```
 
 ### Building shsh itself
-```
+```sh
 sh shsh.sh -t shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh
 ```
 
@@ -89,6 +104,42 @@ done
 for x in a b c
   echo $x
 done
+```
+
+---
+
+### Try/Catch
+```sh
+try
+  echo "attempting risky operation"
+  might_fail
+  echo "success"
+catch
+  echo "caught error with exit code: $error"
+end
+```
+
+Try without catch (silently ignore errors):
+```sh
+try
+  might_fail
+  might_also_fail
+end
+echo "continues regardless"
+```
+
+Nested try/catch:
+```sh
+try
+  try
+    inner_operation
+  catch
+    echo "inner failed: $error"
+  end
+  outer_operation
+catch
+  echo "outer failed: $error"
+end
 ```
 
 ---
