@@ -25,7 +25,7 @@ curl -fsSL https://sh.dawn.day | sh
 
 Or manually:
 ```sh
-curl -o /usr/local/bin/shsh https://raw.githubusercontent.com/user/shsh/main/shsh.sh
+curl -o /usr/local/bin/shsh https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh
 chmod +x /usr/local/bin/shsh
 ```
 
