@@ -1,8 +1,11 @@
-VERSION="0.20.0"
+#
+#       shsh - shell in shell
+#       Shell without the hieroglyphics
+VERSION="0.21.0"
 
-RUNTIME='
-_shsh_sq=$(printf "\\047")
-_shsh_dq=$(printf "\\042")
+# __RUNTIME_START__
+_shsh_sq=$(printf "\047")
+_shsh_dq=$(printf "\042")
 
 _shsh_check_name() {
   case "$1" in
@@ -478,8 +481,7 @@ bit_128() {
     esac
   done
 }
-'
-eval "$RUNTIME"
+# __RUNTIME_END__
 
 block_stack=""
 single_line_if_active=0
@@ -845,13 +847,27 @@ transform() {
 run_file() {
   script="$1"
   shift
-  eval "$RUNTIME"
   eval "$(transform < "$script")"
 }
 
-run_code() {
-  eval "$RUNTIME"
-  eval "$(printf '%s\n' "$1" | transform)"
+emit_runtime() {
+  _er_emit=0
+  while IFS= read -r _er_line || [ -n "$_er_line" ]; do
+    case $_er_emit in
+    0)
+      if str_starts "$_er_line" "# __RUNTIME_START__"; then
+        _er_emit=1
+        printf '%s\n' "$_er_line"
+      fi
+    ;;
+    1)
+      printf '%s\n' "$_er_line"
+      if str_starts "$_er_line" "# __RUNTIME_END__"; then
+        _er_emit=2
+      fi
+    ;;
+    esac
+  done < "$0"
 }
 
 info() {
@@ -862,6 +878,7 @@ info() {
     printf '%s\n' "  <script>       run script"
     printf '%s\n' "  -c 'code'      run inline code"
     printf '%s\n' "  -t [script]    transform (file or stdin)"
+    printf '%s\n' "  -e [script]    emit standalone (with runtime)"
     printf '%s\n' "  -              read from stdin"
     printf '%s\n' "  install        install to system"
     printf '%s\n' "  uninstall      remove from system"
@@ -870,9 +887,17 @@ info() {
 
 case $1 in
   -c)
-           run_code "$2"
+           eval "$(printf '%s\n' "$2" | transform)"
   ;;
   -t)
+    if is "\"$2\" == \"\""; then
+      transform
+    else
+      transform < "$2"
+    fi
+  ;;
+  -e)
+    emit_runtime
     if is "\"$2\" == \"\""; then
       transform
     else
@@ -886,7 +911,7 @@ case $1 in
       printf '%s\n' "shsh $VERSION"
   ;;
   -)
-            eval "$RUNTIME"; eval "$(transform)"
+            eval "$(transform)"
   ;;
   install)
     shell="$HOME/.profile"
