@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.23.0"
+VERSION="0.24.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -112,8 +112,7 @@ array_add() {
 array_for() {
   _shsh_check_name "$1" || return 1
   _af_d=${_af_d:--1}; _af_d=$((_af_d + 1))
-  eval "_af_len_$_af_d=\"\${__shsh_${1}_n:-0}\""
-  eval "_af_i_$_af_d=0"
+  eval "_af_len_$_af_d=\"\${__shsh_${1}_n:-0}\"; _af_i_$_af_d=0"
   while eval "[ \$_af_i_$_af_d -lt \$_af_len_$_af_d ]"; do
     eval "_af_idx=\$_af_i_$_af_d"
     eval "R=\"\${__shsh_${1}_$_af_idx}\""
@@ -150,8 +149,7 @@ array_remove() {
     eval "__shsh_${1}_$_ar_i=\"\${__shsh_${1}_$((_ar_i + 1))}\""
     _ar_i=$((_ar_i + 1))
   done
-  eval "unset __shsh_${1}_$((_ar_len - 1))"
-  eval "__shsh_${1}_n=$((_ar_len - 1))"
+  eval "unset __shsh_${1}_$((_ar_len - 1)); __shsh_${1}_n=$((_ar_len - 1))"
 }
 
 array_delete() { array_remove "$@"; }
@@ -159,8 +157,7 @@ array_delete() { array_remove "$@"; }
 map_set() {
   _shsh_check_name "$1" || return 1
   _shsh_check_name "$2" || return 1
-  eval "__shsh_map_${1}_${2}=\"\$3\""
-  eval "_mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
+  eval "__shsh_map_${1}_${2}=\"\$3\"; _mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
   if [ -z "$_mset_exists" ]; then
     eval "__shsh_map_${1}_${2}__exists=1"
     eval "_mset_idx=\"\${__shsh_mapkeys_${1}_n:-0}\""
@@ -172,8 +169,7 @@ map_set() {
 map_keys() {
   _shsh_check_name "$1" || return 1
   _shsh_check_name "$2" || return 1
-  eval "__shsh_${2}_n=0"
-  eval "_mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  eval "__shsh_${2}_n=0; _mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
   _mk_i=0
   while [ "$_mk_i" -lt "$_mk_len" ]; do
     eval "_mk_key=\"\${__shsh_mapkeys_${1}_$_mk_i}\""
@@ -186,8 +182,7 @@ map_keys() {
 map_for() {
   _shsh_check_name "$1" || return 1
   _mf_d=${_mf_d:--1}; _mf_d=$((_mf_d + 1))
-  eval "_mf_len_$_mf_d=\"\${__shsh_mapkeys_${1}_n:-0}\""
-  eval "_mf_i_$_mf_d=0"
+  eval "_mf_len_$_mf_d=\"\${__shsh_mapkeys_${1}_n:-0}\"; _mf_i_$_mf_d=0"
   while eval "[ \$_mf_i_$_mf_d -lt \$_mf_len_$_mf_d ]"; do
     eval "_mf_idx=\$_mf_i_$_mf_d"
     eval "_mf_key=\"\${__shsh_mapkeys_${1}_$_mf_idx}\""
@@ -984,6 +979,7 @@ info() {
     printf '%s\n' "  -              read from stdin"
     printf '%s\n' "  install        install to system"
     printf '%s\n' "  uninstall      remove from system"
+    printf '%s\n' "  update         update from github (sudo)"
     printf '%s\n' "  version        show version"
 }
 
@@ -1041,6 +1037,32 @@ switch $1
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"
       if [ -f "$loc" ]: rm "$loc" && printf '%s\n' "removed: $loc"
     done
+  case update
+    _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
+    _dest="/usr/local/bin/shsh"
+    printf '%s\n' "downloading shsh from github..."
+    if command -v curl >/dev/null 2>&1
+      _tmp=$(mktemp)
+      if curl -fsSL "$_url" -o "$_tmp"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
+      else
+        rm -f "$_tmp"
+        printf '%s\n' "error: download failed" >&2
+        exit 1
+      end
+    elif command -v wget >/dev/null 2>&1
+      _tmp=$(mktemp)
+      if wget -qO "$_tmp" "$_url"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
+      else
+        rm -f "$_tmp"
+        printf '%s\n' "error: download failed" >&2
+        exit 1
+      end
+    else
+      printf '%s\n' "error: curl or wget required" >&2
+      exit 1
+    end
   case "": info
   case -*: info
   default: run_file "$@"
