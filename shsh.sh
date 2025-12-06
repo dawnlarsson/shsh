@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.21.0"
+VERSION="0.22.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -509,10 +509,10 @@ is_comparison() {
   case $1 in
   *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*)
     return 0
-  ;;
+    ;;
   *)
     return 1
-  ;;
+    ;;
   esac
 }
 
@@ -591,7 +591,7 @@ transform_line() {
       push i
     fi
   
-  ;;
+    ;;
   "elif "*)
     str_after "$stripped" "elif "; rest="$R"
     if str_contains "$rest" "$COLON_SPACE"; then
@@ -605,7 +605,7 @@ transform_line() {
       emit_condition "elif" "$rest" "$indent" "$SEMICOLON_THEN"
     fi
   
-  ;;
+    ;;
   "else:"*)
     str_after "$stripped" "else:"; statement="$R"
     str_ltrim "$statement"; statement="$R"
@@ -616,20 +616,26 @@ transform_line() {
       single_line_if_active=0
     fi
   
-  ;;
+    ;;
   "else")
     printf '%s\n' "${indent}else"
   
-  ;;
+    ;;
   "while "*)
     str_after "$stripped" "while "; expression="$R"
-    if str_contains "$stripped" "$SEMICOLON_DO"; then
+    if str_contains "$expression" "$COLON_SPACE"; then
+      str_before "$expression" "$COLON_SPACE"; condition="$R"
+      str_after "$expression" "$COLON_SPACE"; statement="$R"
+      emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
+      printf '%s\n' "${indent}  ${statement}"
+      printf '%s\n' "${indent}done"
+    elif str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
     else
       emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
     fi
   
-  ;;
+    ;;
   "for "*)
     if str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
@@ -637,25 +643,25 @@ transform_line() {
       printf '%s\n' "${indent}${stripped}; do"
     fi
   
-  ;;
+    ;;
   "done")
     printf '%s\n' "${indent}done"
   
-  ;;
+    ;;
   "switch "*)
     str_after "$stripped" "switch "; expression="$R"
     printf '%s\n' "${indent}case $expression in"
     push s
     switch_push_first
   
-  ;;
+    ;;
   "case "*)
     peek
     if is "\"$R\" == \"s\""; then
       str_after "$stripped" "case "; rest="$R"
       
       if ! switch_is_first; then
-        printf '%s\n' "${indent};;"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       
@@ -688,12 +694,12 @@ transform_line() {
       printf '%s\n' "$line"
     fi
   
-  ;;
+    ;;
   "default:"*)
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf '%s\n' "${indent};;"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
@@ -706,12 +712,12 @@ transform_line() {
       printf '%s\n' "$line"
     fi
   
-  ;;
+    ;;
   "default")
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf '%s\n' "${indent};;"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       printf '%s\n' "${indent}*)"
@@ -719,11 +725,11 @@ transform_line() {
       printf '%s\n' "$line"
     fi
   
-  ;;
+    ;;
   "end")
     peek
     if is "\"$R\" == \"s\""; then
-      printf '%s\n' "${indent};;"
+      printf '%s\n' "${indent}  ;;"
       printf '%s\n' "${indent}esac"
       switch_pop_first
       pop
@@ -732,100 +738,100 @@ transform_line() {
       pop
     fi
   
-  ;;
+    ;;
   *"++")
     str_before "$stripped" "++"; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *"--")
     str_before "$stripped" "--"; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *" += "*)
     str_before "$stripped" " += "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         str_after "$stripped" " += "; value="$R"
         printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *" -= "*)
     str_before "$stripped" " -= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         str_after "$stripped" " -= "; value="$R"
         printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *" *= "*)
     str_before "$stripped" " *= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         str_after "$stripped" " *= "; value="$R"
         printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *" /= "*)
     str_before "$stripped" " /= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         str_after "$stripped" " /= "; value="$R"
         printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *" %= "*)
     str_before "$stripped" " %= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
         printf '%s\n' "$line"
-      ;;
+        ;;
       *)
         str_after "$stripped" " %= "; value="$R"
         printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
-    ;;
+      ;;
     esac
   
-  ;;
+    ;;
   *)
     printf '%s\n' "$line"
   
-  ;;
+    ;;
   esac
 }
 
@@ -850,6 +856,137 @@ run_file() {
   eval "$(transform < "$script")"
 }
 
+emit_runtime_stripped() {
+  _ers_source="$1"
+  
+  # Phase 1: Extract all runtime functions and their bodies
+  _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
+    if str_starts "$_ers_line" "# __RUNTIME_START__"; then
+      _ers_in_rt=1; continue
+    fi
+    if str_starts "$_ers_line" "# __RUNTIME_END__"; then
+      break
+    fi
+    if is "$_ers_in_rt == 0"; then
+      continue
+    fi
+    
+    # Check for function start
+    case "$_ers_line" in
+    *"() {"*)
+      str_before "$_ers_line" "()"; _ers_cur_fn="$R"
+      str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
+      _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
+      _ers_cur_body=""
+      ;;
+    "}")
+      # Store the function body for dependency analysis
+      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
+      _ers_cur_fn=""
+      ;;
+    *)
+      if is "\"$_ers_cur_fn\" != \"\""; then
+        _ers_cur_body="$_ers_cur_body $_ers_line"
+      fi
+      ;;
+    esac
+  done < "$0"
+  
+  # Phase 2: Build dependency map by checking which functions each body calls
+  for _ers_fn in $_ers_all_fns; do
+    eval "_ers_body=\"\$_rt_body_$_ers_fn\""
+    _ers_deps=""
+    for _ers_other in $_ers_all_fns; do
+      if is "\"$_ers_fn\" != \"$_ers_other\""; then
+        case "$_ers_body" in
+        *"$_ers_other"*)
+          _ers_deps="$_ers_deps $_ers_other"
+          ;;
+        esac
+      fi
+    done
+    eval "_rt_deps_$_ers_fn=\"\$_ers_deps\""
+  done
+  
+  # Phase 3: Check which functions the source uses
+  _rt_needed=" is " # is() always needed for shsh conditionals
+  for _ers_fn in $_ers_all_fns; do
+    case "$_ers_source" in
+    *"$_ers_fn"*)
+      # Mark as needed and resolve dependencies recursively
+      _rt_need_fn "$_ers_fn"
+      ;;
+    esac
+  done
+  
+  # Phase 4: Emit only needed functions
+  _ers_emit=0 _ers_skip=0
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
+    case $_ers_emit in
+    0)
+      if str_starts "$_ers_line" "# __RUNTIME_START__"; then
+        _ers_emit=1
+        printf '%s\n' "$_ers_line"
+      fi
+      ;;
+    1)
+      if str_starts "$_ers_line" "# __RUNTIME_END__"; then
+        printf '%s\n' "$_ers_line"
+        _ers_emit=2
+      else
+        case "$_ers_line" in
+        *"() {"*)
+          str_before "$_ers_line" "()"; _ers_fn="$R"
+          str_ltrim "$_ers_fn"; _ers_fn="$R"
+          case "$_rt_needed" in
+          *" $_ers_fn "*)
+            _ers_skip=0
+            printf '%s\n' "$_ers_line"
+            ;;
+          *)
+            _ers_skip=1
+            ;;
+          esac
+          ;;
+        "}")
+          if is "$_ers_skip == 0"; then
+            printf '%s\n' "$_ers_line"
+          fi
+          _ers_skip=0
+          ;;
+        "")
+          if is "$_ers_skip == 0"; then
+            printf '%s\n' ""
+          fi
+          ;;
+        *)
+          if is "$_ers_skip == 0"; then
+            printf '%s\n' "$_ers_line"
+          fi
+          ;;
+        esac
+      fi
+      ;;
+    esac
+  done < "$0"
+}
+
+_rt_need_fn() {
+  # Already needed?
+  case "$_rt_needed" in
+  *" $1 "*)
+    return
+    ;;
+  esac
+  _rt_needed="$_rt_needed $1 "
+  # Recursively add dependencies
+  eval "_rnf_deps=\"\$_rt_deps_$1\""
+  for _rnf_dep in $_rnf_deps; do
+    _rt_need_fn "$_rnf_dep"
+  done
+}
+
 emit_runtime() {
   _er_emit=0
   while IFS= read -r _er_line || [ -n "$_er_line" ]; do
@@ -859,13 +996,13 @@ emit_runtime() {
         _er_emit=1
         printf '%s\n' "$_er_line"
       fi
-    ;;
+      ;;
     1)
       printf '%s\n' "$_er_line"
       if str_starts "$_er_line" "# __RUNTIME_END__"; then
         _er_emit=2
       fi
-    ;;
+      ;;
     esac
   done < "$0"
 }
@@ -878,7 +1015,8 @@ info() {
     printf '%s\n' "  <script>       run script"
     printf '%s\n' "  -c 'code'      run inline code"
     printf '%s\n' "  -t [script]    transform (file or stdin)"
-    printf '%s\n' "  -e [script]    emit standalone (with runtime)"
+    printf '%s\n' "  -e [script]    emit standalone (stripped runtime)"
+    printf '%s\n' "  -E [script]    emit standalone (full runtime)"
     printf '%s\n' "  -              read from stdin"
     printf '%s\n' "  install        install to system"
     printf '%s\n' "  uninstall      remove from system"
@@ -888,31 +1026,42 @@ info() {
 case $1 in
   -c)
            eval "$(printf '%s\n' "$2" | transform)"
-  ;;
+    ;;
   -t)
     if is "\"$2\" == \"\""; then
       transform
     else
       transform < "$2"
     fi
-  ;;
+    ;;
   -e)
+    if is "\"$2\" == \"\""; then
+      _es_code="$(transform)"
+      emit_runtime_stripped "$_es_code"
+      printf '%s\n' "$_es_code"
+    else
+      _es_code="$(transform < "$2")"
+      emit_runtime_stripped "$_es_code"
+      printf '%s\n' "$_es_code"
+    fi
+    ;;
+  -E)
     emit_runtime
     if is "\"$2\" == \"\""; then
       transform
     else
       transform < "$2"
     fi
-  ;;
+    ;;
   -v)
            printf '%s\n' "shsh $VERSION"
-  ;;
+    ;;
   version)
       printf '%s\n' "shsh $VERSION"
-  ;;
+    ;;
   -)
             eval "$(transform)"
-  ;;
+    ;;
   install)
     shell="$HOME/.profile"
     case $SHELL in
@@ -922,13 +1071,13 @@ case $1 in
         else
           shell="$HOME/.bashrc"
         fi
-      ;;
+        ;;
       */zsh)
          shell="$HOME/.zshrc"
-      ;;
+        ;;
       */fish)
         shell="$HOME/.config/fish/config.fish"
-    ;;
+      ;;
     esac
 
     if [ -w /usr/local/bin ]; then
@@ -942,7 +1091,7 @@ case $1 in
 
     case ":$PATH:" in
       *":$(dirname "$dest"):"*)
-      ;;
+        ;;
       *)
         grep -qF '.local/bin' "$shell" 2>/dev/null || {
           printf '%s\n' '# shsh' >> "$shell"
@@ -950,23 +1099,23 @@ case $1 in
           printf '%s\n' "added PATH to $shell"
         }
         printf '%s\n' "run: exec \$SHELL"
-    ;;
+      ;;
     esac
-  ;;
+    ;;
   uninstall)
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
       if [ -f "$loc" ]; then
         rm "$loc" && printf '%s\n' "removed: $loc"
       fi
     done
-  ;;
+    ;;
   "")
     info
-  ;;
+    ;;
   -*)
     info
-  ;;
+    ;;
   *)
     run_file "$@"
-;;
+  ;;
 esac

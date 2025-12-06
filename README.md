@@ -1,6 +1,8 @@
 # shsh
 Arrays, Maps & modern syntax for POSIX shells.
 
+self hosted in itself! passing all 404 tests
+
 ### Install
 ```sh
 curl -fsSL https://sh.dawn.day | sh
@@ -18,6 +20,11 @@ shsh script.sh           # run script
 shsh -c 'code'           # run inline
 shsh -e script.sh        # emit standalone POSIX
 shsh -t script.sh        # transform only (no toolkit)
+```
+
+### Building shsh itself
+```
+sh shsh.sh -t shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh
 ```
 
 ---

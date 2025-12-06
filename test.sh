@@ -2293,27 +2293,203 @@ echo "=== Script Argument Passing ==="
 
 printf 'printf "%%s\\n" "$@"\n' > /tmp/shsh_args_test.shsh
 
-_args_out="$(shsh /tmp/shsh_args_test.shsh one)"
+_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh one)"
 assert_eq "single arg passed" "$_args_out" "one"
 
-_args_out="$(shsh /tmp/shsh_args_test.shsh one two three | tr '\n' ',')"
+_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh one two three | tr '\n' ',')"
 assert_eq "multi args passed" "$_args_out" "one,two,three,"
 
-_args_out="$(shsh /tmp/shsh_args_test.shsh "hello world")"
+_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh "hello world")"
 assert_eq "arg with space" "$_args_out" "hello world"
 
-_args_out="$(shsh /tmp/shsh_args_test.shsh)"
+_args_out="$(./shsh.sh /tmp/shsh_args_test.shsh)"
 assert_eq "no args (empty)" "$_args_out" ""
 
 printf 'printf "count:%%s\\n" "$#"\n' > /tmp/shsh_argc_test.shsh
-_argc_out="$(shsh /tmp/shsh_argc_test.shsh a b c d e)"
+_argc_out="$(./shsh.sh /tmp/shsh_argc_test.shsh a b c d e)"
 assert_eq "arg count 5" "$_argc_out" "count:5"
 
 printf 'printf "first:%%s second:%%s\\n" "$1" "$2"\n' > /tmp/shsh_posarg_test.shsh
-_posarg_out="$(shsh /tmp/shsh_posarg_test.shsh alpha beta gamma)"
+_posarg_out="$(./shsh.sh /tmp/shsh_posarg_test.shsh alpha beta gamma)"
 assert_eq "positional args \$1 \$2" "$_posarg_out" "first:alpha second:beta"
 
 rm -f /tmp/shsh_args_test.shsh /tmp/shsh_argc_test.shsh /tmp/shsh_posarg_test.shsh
+
+echo ""
+echo "=== Compiler Output Validation ==="
+
+# Test that compiled switch produces valid shell syntax
+cat > /tmp/shsh_switch_compile.shsh << 'SHSH'
+switch $x
+  case a: echo a
+  case b: echo b
+end
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_switch_compile.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "switch compilation produces valid shell"
+else
+  fail "switch compilation produces invalid shell"
+end
+
+# Test nested switch compilation
+cat > /tmp/shsh_nested_switch.shsh << 'SHSH'
+switch $outer
+  case a
+    switch $inner
+      case x: echo ax
+      case y: echo ay
+    end
+  case b
+    echo b
+end
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_nested_switch.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "nested switch compilation produces valid shell"
+else
+  fail "nested switch compilation produces invalid shell"
+end
+
+# Test 3-level nested switch
+cat > /tmp/shsh_3level_switch.shsh << 'SHSH'
+switch $a
+  case 1
+    switch $b
+      case x
+        switch $c
+          case p: echo 1xp
+          case q: echo 1xq
+        end
+      case y: echo 1y
+    end
+  case 2: echo 2
+end
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_3level_switch.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "3-level nested switch compilation valid"
+else
+  fail "3-level nested switch compilation invalid"
+end
+
+# Test switch with default
+cat > /tmp/shsh_switch_default.shsh << 'SHSH'
+switch $x
+  case a: echo a
+  default: echo other
+end
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_switch_default.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "switch with default compilation valid"
+else
+  fail "switch with default compilation invalid"
+end
+
+# Test switch inside if
+cat > /tmp/shsh_switch_in_if.shsh << 'SHSH'
+if $cond == 1
+  switch $x
+    case a: echo a
+    case b: echo b
+  end
+end
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_switch_in_if.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "switch inside if compilation valid"
+else
+  fail "switch inside if compilation invalid"
+end
+
+# Test single-line while with colon
+cat > /tmp/shsh_while_colon.shsh << 'SHSH'
+i=0
+while $i < 3: i=$((i + 1))
+echo done
+SHSH
+_compiled="$(./shsh.sh -t /tmp/shsh_while_colon.shsh)"
+if sh -n -c "$_compiled" 2>/dev/null
+  pass "single-line while compilation valid"
+else
+  fail "single-line while compilation invalid"
+end
+
+# Test compiled switch actually runs correctly
+cat > /tmp/shsh_switch_run.shsh << 'SHSH'
+result=""
+for x in a b c
+  switch $x
+    case a: result="${result}A"
+    case b: result="${result}B"
+    default: result="${result}X"
+  end
+done
+echo "$result"
+SHSH
+_run_out="$(./shsh.sh /tmp/shsh_switch_run.shsh)"
+assert_eq "compiled switch runs correctly" "$_run_out" "ABX"
+
+# Test nested switch runs correctly
+cat > /tmp/shsh_nested_run.shsh << 'SHSH'
+result=""
+for o in a b
+  for i in x y
+    switch $o
+      case a
+        switch $i
+          case x: result="${result}ax"
+          case y: result="${result}ay"
+        end
+      case b: result="${result}b"
+    end
+  done
+done
+echo "$result"
+SHSH
+_nested_out="$(./shsh.sh /tmp/shsh_nested_run.shsh)"
+assert_eq "nested switch runs correctly" "$_nested_out" "axaybb"
+
+# Test bootstrap produces stable output (compile twice = same result)
+./shsh.sh -t src/shsh.shsh > /tmp/shsh_boot1.sh
+chmod +x /tmp/shsh_boot1.sh
+/tmp/shsh_boot1.sh -t src/shsh.shsh > /tmp/shsh_boot2.sh
+if diff -q /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh >/dev/null 2>&1
+  pass "bootstrap produces stable output"
+else
+  fail "bootstrap produces different output on second compile"
+end
+
+# Test -e strips unused functions
+cat > /tmp/shsh_strip_test.shsh << 'SHSH'
+echo "simple"
+SHSH
+_strip_out="$(./shsh.sh -e /tmp/shsh_strip_test.shsh)"
+_full_out="$(./shsh.sh -E /tmp/shsh_strip_test.shsh)"
+_strip_lines="$(printf '%s\n' "$_strip_out" | wc -l)"
+_full_lines="$(printf '%s\n' "$_full_out" | wc -l)"
+if $_strip_lines < $_full_lines
+  pass "emit -e strips unused runtime functions"
+else
+  fail "emit -e should produce smaller output than -E"
+end
+
+# Test stripped output still runs
+cat > /tmp/shsh_strip_run.shsh << 'SHSH'
+array_add items "a"
+array_add items "b"
+array_len items
+echo "$R"
+SHSH
+./shsh.sh -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
+_strip_run_out="$(sh /tmp/shsh_strip_run.sh)"
+assert_eq "stripped script runs correctly" "$_strip_run_out" "2"
+
+rm -f /tmp/shsh_switch_compile.shsh /tmp/shsh_nested_switch.shsh /tmp/shsh_3level_switch.shsh
+rm -f /tmp/shsh_switch_default.shsh /tmp/shsh_switch_in_if.shsh /tmp/shsh_while_colon.shsh
+rm -f /tmp/shsh_switch_run.shsh /tmp/shsh_nested_run.shsh /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh
+rm -f /tmp/shsh_strip_test.shsh /tmp/shsh_strip_run.shsh /tmp/shsh_strip_run.sh
 
 echo ""
 echo "========================================"

@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.21.0"
+VERSION="0.22.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -609,7 +609,13 @@ transform_line() {
   
   case "while "*
     str_after "$stripped" "while "; expression="$R"
-    if str_contains "$stripped" "$SEMICOLON_DO"
+    if str_contains "$expression" "$COLON_SPACE"
+      str_before "$expression" "$COLON_SPACE"; condition="$R"
+      str_after "$expression" "$COLON_SPACE"; statement="$R"
+      emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
+      printf '%s\n' "${indent}  ${statement}"
+      printf '%s\n' "${indent}done"
+    elif str_contains "$stripped" "$SEMICOLON_DO"
       printf '%s\n' "$line"
     else
       emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
@@ -636,7 +642,7 @@ transform_line() {
     if "$R" == "s"
       str_after "$stripped" "case "; rest="$R"
       
-      if ! switch_is_first: printf '%s\n' "${indent};;"
+      if ! switch_is_first: printf '%s\n' "${indent}  ;;"
       switch_set_not_first
       
       if str_contains "$rest" "$COLON_SPACE"
@@ -667,7 +673,7 @@ transform_line() {
   case "default:"*
     peek
     if "$R" == "s"
-      if ! switch_is_first: printf '%s\n' "${indent};;"
+      if ! switch_is_first: printf '%s\n' "${indent}  ;;"
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
@@ -680,7 +686,7 @@ transform_line() {
   case "default"
     peek
     if "$R" == "s"
-      if ! switch_is_first: printf '%s\n' "${indent};;"
+      if ! switch_is_first: printf '%s\n' "${indent}  ;;"
       switch_set_not_first
       printf '%s\n' "${indent}*)"
     else
@@ -690,7 +696,7 @@ transform_line() {
   case "end"
     peek
     if "$R" == "s"
-      printf '%s\n' "${indent};;"
+      printf '%s\n' "${indent}  ;;"
       printf '%s\n' "${indent}esac"
       switch_pop_first
       pop
@@ -783,6 +789,108 @@ run_file() {
   eval "$(transform < "$script")"
 }
 
+emit_runtime_stripped() {
+  _ers_source="$1"
+  
+  # Phase 1: Extract all runtime functions and their bodies
+  _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]
+    if str_starts "$_ers_line" "# __RUNTIME_START__": _ers_in_rt=1; continue
+    if str_starts "$_ers_line" "# __RUNTIME_END__": break
+    if $_ers_in_rt == 0: continue
+    
+    # Check for function start
+    switch "$_ers_line"
+    case *"() {"*
+      str_before "$_ers_line" "()"; _ers_cur_fn="$R"
+      str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
+      _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
+      _ers_cur_body=""
+    case "}"
+      # Store the function body for dependency analysis
+      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
+      _ers_cur_fn=""
+    default
+      if "$_ers_cur_fn" != "": _ers_cur_body="$_ers_cur_body $_ers_line"
+    end
+  done < "$0"
+  
+  # Phase 2: Build dependency map by checking which functions each body calls
+  for _ers_fn in $_ers_all_fns
+    eval "_ers_body=\"\$_rt_body_$_ers_fn\""
+    _ers_deps=""
+    for _ers_other in $_ers_all_fns
+      if "$_ers_fn" != "$_ers_other"
+        switch "$_ers_body"
+        case *"$_ers_other"*
+          _ers_deps="$_ers_deps $_ers_other"
+        end
+      end
+    done
+    eval "_rt_deps_$_ers_fn=\"\$_ers_deps\""
+  done
+  
+  # Phase 3: Check which functions the source uses
+  _rt_needed=" is " # is() always needed for shsh conditionals
+  for _ers_fn in $_ers_all_fns
+    switch "$_ers_source"
+    case *"$_ers_fn"*
+      # Mark as needed and resolve dependencies recursively
+      _rt_need_fn "$_ers_fn"
+    end
+  done
+  
+  # Phase 4: Emit only needed functions
+  _ers_emit=0 _ers_skip=0
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]
+    switch $_ers_emit
+    case 0
+      if str_starts "$_ers_line" "# __RUNTIME_START__"
+        _ers_emit=1
+        printf '%s\n' "$_ers_line"
+      end
+    case 1
+      if str_starts "$_ers_line" "# __RUNTIME_END__"
+        printf '%s\n' "$_ers_line"
+        _ers_emit=2
+      else
+        switch "$_ers_line"
+        case *"() {"*
+          str_before "$_ers_line" "()"; _ers_fn="$R"
+          str_ltrim "$_ers_fn"; _ers_fn="$R"
+          switch "$_rt_needed"
+          case *" $_ers_fn "*
+            _ers_skip=0
+            printf '%s\n' "$_ers_line"
+          default
+            _ers_skip=1
+          end
+        case "}"
+          if $_ers_skip == 0: printf '%s\n' "$_ers_line"
+          _ers_skip=0
+        case ""
+          if $_ers_skip == 0: printf '%s\n' ""
+        default
+          if $_ers_skip == 0: printf '%s\n' "$_ers_line"
+        end
+      end
+    end
+  done < "$0"
+}
+
+_rt_need_fn() {
+  # Already needed?
+  switch "$_rt_needed"
+  case *" $1 "*: return
+  end
+  _rt_needed="$_rt_needed $1 "
+  # Recursively add dependencies
+  eval "_rnf_deps=\"\$_rt_deps_$1\""
+  for _rnf_dep in $_rnf_deps
+    _rt_need_fn "$_rnf_dep"
+  done
+}
+
 emit_runtime() {
   _er_emit=0
   while IFS= read -r _er_line || [ -n "$_er_line" ]
@@ -807,7 +915,8 @@ info() {
     printf '%s\n' "  <script>       run script"
     printf '%s\n' "  -c 'code'      run inline code"
     printf '%s\n' "  -t [script]    transform (file or stdin)"
-    printf '%s\n' "  -e [script]    emit standalone (with runtime)"
+    printf '%s\n' "  -e [script]    emit standalone (stripped runtime)"
+    printf '%s\n' "  -E [script]    emit standalone (full runtime)"
     printf '%s\n' "  -              read from stdin"
     printf '%s\n' "  install        install to system"
     printf '%s\n' "  uninstall      remove from system"
@@ -820,6 +929,16 @@ switch $1
     if "$2" == "": transform
     else: transform < "$2"
   case -e
+    if "$2" == ""
+      _es_code="$(transform)"
+      emit_runtime_stripped "$_es_code"
+      printf '%s\n' "$_es_code"
+    else
+      _es_code="$(transform < "$2")"
+      emit_runtime_stripped "$_es_code"
+      printf '%s\n' "$_es_code"
+    end
+  case -E
     emit_runtime
     if "$2" == "": transform
     else: transform < "$2"
