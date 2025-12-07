@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.28.0"
+VERSION="0.29.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -349,9 +349,9 @@ bit_64() {
     _b64_h=$(( _b64_v >> 32 ))
     _b64_l=$(( _b64_v & 0xFFFFFFFF ))
     _h1=$(( (_b64_h >> 24) & 0xff )); _h2=$(( (_b64_h >> 16) & 0xff ))
-    _h3=$(( (_b64_h >> 8) & 0xff ));  _h4=$(( _b64_h & 0xff ))
+    _h3=$(( (_b64_h >> 8) & 0xff )); _h4=$(( _b64_h & 0xff ))
     _l1=$(( (_b64_l >> 24) & 0xff )); _l2=$(( (_b64_l >> 16) & 0xff ))
-    _l3=$(( (_b64_l >> 8) & 0xff ));  _l4=$(( _b64_l & 0xff ))
+    _l3=$(( (_b64_l >> 8) & 0xff )); _l4=$(( _b64_l & 0xff ))
     _oh1="\\$(( (_h1>>6)&7 ))$(( (_h1>>3)&7 ))$(( _h1&7 ))"
     _oh2="\\$(( (_h2>>6)&7 ))$(( (_h2>>3)&7 ))$(( _h2&7 ))"
     _oh3="\\$(( (_h3>>6)&7 ))$(( (_h3>>3)&7 ))$(( _h3&7 ))"
@@ -427,12 +427,126 @@ current_try_depth() {
   R=$_ctd_n
 }
 
+transform_statement() {
+  _ts_stmt="$1"
+  str_ltrim "$_ts_stmt"; _ts_stmt="$R"
+  case $_ts_stmt in
+  *"++")
+    str_before "$_ts_stmt" "++"; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        R="${_ts_var}=\$((${_ts_var} + 1))"
+      ;;
+    esac
+    ;;
+  *"--")
+    str_before "$_ts_stmt" "--"; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        R="${_ts_var}=\$((${_ts_var} - 1))"
+      ;;
+    esac
+    ;;
+  *" += "*)
+    str_before "$_ts_stmt" " += "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " += "; _ts_val="$R"
+        R="${_ts_var}=\$((${_ts_var} + ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *" -= "*)
+    str_before "$_ts_stmt" " -= "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " -= "; _ts_val="$R"
+        R="${_ts_var}=\$((${_ts_var} - ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *" *= "*)
+    str_before "$_ts_stmt" " *= "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " *= "; _ts_val="$R"
+        R="${_ts_var}=\$((${_ts_var} * ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *" /= "*)
+    str_before "$_ts_stmt" " /= "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " /= "; _ts_val="$R"
+        R="${_ts_var}=\$((${_ts_var} / ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *" %= "*)
+    str_before "$_ts_stmt" " %= "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " %= "; _ts_val="$R"
+        R="${_ts_var}=\$((${_ts_var} % ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *)
+    R="$_ts_stmt"
+    ;;
+  esac
+}
+
+transform_semicolon_parts() {
+  _tsp_line="$1"
+  _tsp_out=""
+  _tsp_sep=""
+  
+  while str_contains "$_tsp_line" "; "; do
+    str_before "$_tsp_line" "; "; _tsp_part="$R"
+    str_after "$_tsp_line" "; "; _tsp_line="$R"
+    transform_statement "$_tsp_part"
+    _tsp_out="$_tsp_out$_tsp_sep$R"
+    _tsp_sep="; "
+  done
+  
+  transform_statement "$_tsp_line"
+  _tsp_out="$_tsp_out$_tsp_sep$R"
+  R="$_tsp_out"
+}
+
 emit_with_try_check() {
+  str_indent "$1"; _ewtc_indent="$R"
+  str_ltrim "$1"; _ewtc_stmt="$R"
+  transform_semicolon_parts "$_ewtc_stmt"
+  _ewtc_transformed="${_ewtc_indent}$R"
   if in_try_block; then
     current_try_depth
-    printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$1" "$R" "$R"
+    printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$_ewtc_transformed" "$R" "$R"
   else
-    printf '%s\n' "$1"
+    printf '%s\n' "$_ewtc_transformed"
   fi
 }
 
@@ -761,92 +875,127 @@ transform_line() {
   
     ;;
   *"++")
-    str_before "$stripped" "++"; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" "++"; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
         ;;
-      *)
-        printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *"--")
-    str_before "$stripped" "--"; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" "--"; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
         ;;
-      *)
-        printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *" += "*)
-    str_before "$stripped" " += "; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" " += "; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          str_after "$stripped" " += "; value="$R"
+          printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
         ;;
-      *)
-        str_after "$stripped" " += "; value="$R"
-        printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *" -= "*)
-    str_before "$stripped" " -= "; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" " -= "; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          str_after "$stripped" " -= "; value="$R"
+          printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
         ;;
-      *)
-        str_after "$stripped" " -= "; value="$R"
-        printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *" *= "*)
-    str_before "$stripped" " *= "; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" " *= "; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          str_after "$stripped" " *= "; value="$R"
+          printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
         ;;
-      *)
-        str_after "$stripped" " *= "; value="$R"
-        printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *" /= "*)
-    str_before "$stripped" " /= "; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" " /= "; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          str_after "$stripped" " /= "; value="$R"
+          printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
         ;;
-      *)
-        str_after "$stripped" " /= "; value="$R"
-        printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *" %= "*)
-    str_before "$stripped" " %= "; variable="$R"
-    case $variable in
-      *[!a-zA-Z0-9_]*|"")
-        printf '%s\n' "$line"
+    if str_contains "$stripped" "; "; then
+      transform_semicolon_parts "$stripped"
+      printf '%s\n' "${indent}$R"
+    else
+      str_before "$stripped" " %= "; variable="$R"
+      case $variable in
+        *[!a-zA-Z0-9_]*|"")
+          printf '%s\n' "$line"
+          ;;
+        *)
+          str_after "$stripped" " %= "; value="$R"
+          printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
         ;;
-      *)
-        str_after "$stripped" " %= "; value="$R"
-        printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
-      ;;
-    esac
+      esac
+    fi
   
     ;;
   *)

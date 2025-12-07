@@ -1,10 +1,10 @@
 PASS=0 FAIL=0
 
 _test_script="repo/test.sh"
-if [ -f "./shsh.sh" ]; then
+if file_exists "./shsh.sh"
   _shsh="./shsh.sh"
   _shsh_src="./shsh.shsh"
-elif [ -f "../shsh.sh" ]; then
+elif file_exists "../shsh.sh"
   _shsh="../shsh.sh"
   _shsh_src="../shsh.shsh"
 else
@@ -15,18 +15,18 @@ end
 assert_eq() {
   _aeq_name="$1" _aeq_got="$2" _aeq_want="$3"
   if "$_aeq_got" == "$_aeq_want"
-    echo "✓ $_aeq_name"; PASS=$((PASS + 1))
+    echo "✓ $_aeq_name"; PASS++
   else
-    echo "✗ $_aeq_name: got '$_aeq_got', want '$_aeq_want'"; FAIL=$((FAIL + 1))
+    echo "✗ $_aeq_name: got '$_aeq_got', want '$_aeq_want'"; FAIL++
   end
 }
 
 assert_neq() {
   _aneq_name="$1" _aneq_got="$2" _aneq_reject="$3"
   if "$_aneq_got" != "$_aneq_reject"
-    echo "✓ $_aneq_name"; PASS=$((PASS + 1))
+    echo "✓ $_aneq_name"; PASS++
   else
-    echo "✗ $_aneq_name: got '$_aneq_got', should not be '$_aneq_reject'"; FAIL=$((FAIL + 1))
+    echo "✗ $_aneq_name: got '$_aneq_got', should not be '$_aneq_reject'"; FAIL++
   end
 }
 
@@ -34,8 +34,8 @@ hex_capture() {
   eval "$1" | od -A n -t x1 -v | tr -d ' \n'
 }
 
-pass() { echo "✓ $1"; PASS=$((PASS + 1)); }
-fail() { echo "✗ $1"; FAIL=$((FAIL + 1)); }
+pass() { echo "✓ $1"; PASS++; }
+fail() { echo "✗ $1"; FAIL++; }
 
 echo "=== Arrays ==="
 
@@ -448,12 +448,9 @@ echo "=== Switch ==="
 _sw_result=""
 for val in foo bar baz qux
   switch $val
-  case foo
-    _sw_result="${_sw_result}F"
-  case bar|baz
-    _sw_result="${_sw_result}B"
-  default
-    _sw_result="${_sw_result}X"
+  case foo: _sw_result="${_sw_result}F"
+  case bar|baz: _sw_result="${_sw_result}B"
+  default: _sw_result="${_sw_result}X"
   end
 done
 assert_eq "switch" "$_sw_result" "FBBX"
@@ -464,13 +461,11 @@ for outer in a b
     switch $outer
     case a
       switch $inner
-      case x
-        _nested_sw="${_nested_sw}ax"
-      case y
-        _nested_sw="${_nested_sw}ay"
+        case x: _nested_sw="${_nested_sw}ax"
+        case y: _nested_sw="${_nested_sw}ay"
       end
     case b
-      _nested_sw="${_nested_sw}b"
+        _nested_sw="${_nested_sw}b"
     end
   done
 done
@@ -505,18 +500,15 @@ assert_eq "3-level nested switch" "$result" "1xp1xq1y2"
 # switch with only default
 _def_only=""
 switch "unknown"
-default
-  _def_only="hit"
+default: _def_only="hit"
 end
 assert_eq "switch default only" "$_def_only" "hit"
 
 # switch no match no default
 _no_match="unchanged"
 switch "nomatch"
-case foo
-  _no_match="foo"
-case bar
-  _no_match="bar"
+case foo: _no_match="foo"
+case bar: _no_match="bar"
 end
 assert_eq "switch no match" "$_no_match" "unchanged"
 
@@ -1150,6 +1142,51 @@ mod_larger=3
 mod_larger %= 10
 assert_eq "x %= larger" "$mod_larger" "3"
 
+# ++ after semicolon (semicolon-separated statements)
+semi_inc=0
+echo "test" > /dev/null; semi_inc++
+assert_eq "++ after semicolon" "$semi_inc" "1"
+
+# -- after semicolon
+semi_dec=5
+echo "test" > /dev/null; semi_dec--
+assert_eq "-- after semicolon" "$semi_dec" "4"
+
+# += after semicolon
+semi_add=10
+echo "test" > /dev/null; semi_add += 5
+assert_eq "+= after semicolon" "$semi_add" "15"
+
+# ++ in inline if statement body
+inline_if_inc=0
+if true: inline_if_inc++
+assert_eq "++ in inline if" "$inline_if_inc" "1"
+
+# ++ with preceding statement in inline if
+inline_if_semi=0
+if true: echo "ok" > /dev/null; inline_if_semi++
+assert_eq "++ after semicolon in inline if" "$inline_if_semi" "1"
+
+# -- in inline else
+inline_else_dec=10
+if false: inline_else_dec=99
+else: inline_else_dec--
+assert_eq "-- in inline else" "$inline_else_dec" "9"
+
+# += in inline elif
+inline_elif_add=5
+if false: inline_elif_add=0
+elif true: inline_elif_add += 10
+assert_eq "+= in inline elif" "$inline_elif_add" "15"
+
+# ++ in function with semicolon
+_fn_semi_cnt=0
+_fn_semi_test() {
+  echo "in func" > /dev/null; _fn_semi_cnt++
+}
+_fn_semi_test
+assert_eq "++ in function after semicolon" "$_fn_semi_cnt" "1"
+
 echo ""
 echo "=== Single-Line If ==="
 
@@ -1425,11 +1462,11 @@ else
   fail "shsh with no args failed (status $_usage_status)"
 end
 
-if [ -f "$_shsh" ]; then
+if file_exists "$_shsh"
   _shsh_path="$_shsh"
-elif [ -f "${0%/*}/../shsh.sh" ]; then
+elif file_exists "${0%/*}/../shsh.sh"
   _shsh_path="${0%/*}/../shsh.sh"
-elif [ -f "/usr/local/bin/shsh" ]; then
+elif file_exists "/usr/local/bin/shsh"
   _shsh_path="/usr/local/bin/shsh"
 else
   _shsh_path="$_shsh"
@@ -1521,18 +1558,18 @@ array_len enum_keys; assert_eq "map_keys count" "$R" "3"
 
 _found_alpha=0 _found_beta=0 _found_gamma=0
 check_enum_key() {
-  case "$R" in
-    alpha) _found_alpha=1 ;;
-    beta)  _found_beta=1 ;;
-    gamma) _found_gamma=1 ;;
-  esac
+  switch $R
+  case alpha: _found_alpha=1
+  case beta:  _found_beta=1
+  case gamma: _found_gamma=1
+  end
 }
 array_for enum_keys check_enum_key
-if [ "$_found_alpha" = "1" ] && [ "$_found_beta" = "1" ] && [ "$_found_gamma" = "1" ]; then
+if $_found_alpha == 1 && $_found_beta == 1 && $_found_gamma == 1
   pass "map_keys contains all keys"
 else
   fail "map_keys missing keys (a=$_found_alpha b=$_found_beta g=$_found_gamma)"
-fi
+end
 
 map_keys empty_map empty_keys 2>/dev/null
 array_len empty_keys; assert_eq "map_keys empty" "$R" "0"
@@ -1545,18 +1582,18 @@ map_keys del_enum_map del_enum_keys
 array_len del_enum_keys; assert_eq "map_keys after delete count" "$R" "2"
 _has_a=0 _has_b=0 _has_c=0
 check_del_key() {
-  case "$R" in
-    a) _has_a=1 ;;
-    b) _has_b=1 ;;
-    c) _has_c=1 ;;
-  esac
+  switch $R
+  case a: _has_a=1
+  case b: _has_b=1
+  case c: _has_c=1
+  end
 }
 array_for del_enum_keys check_del_key
-if [ "$_has_a" = "1" ] && [ "$_has_b" = "0" ] && [ "$_has_c" = "1" ]; then
+if $_has_a == 1 && $_has_b == 0 && $_has_c == 1
   pass "map_keys excludes deleted"
 else
   fail "map_keys delete handling (a=$_has_a b=$_has_b c=$_has_c)"
-fi
+end
 
 map_set dup_map key "first"
 map_set dup_map key "second"
@@ -1578,12 +1615,10 @@ sum_map() {
 map_for for_map sum_map
 assert_eq "map_for sum values" "$_for_sum" "60"
 
-case "$_for_keys" in
-  *x*y*z*|*x*z*y*|*y*x*z*|*y*z*x*|*z*x*y*|*z*y*x*)
-    pass "map_for visits all keys" ;;
-  *)
-    fail "map_for keys incomplete: $_for_keys" ;;
-esac
+switch $_for_keys
+case *x*y*z*|*x*z*y*|*y*x*z*|*y*z*x*|*z*x*y*|*z*y*x*: pass "map_for visits all keys"
+case *: fail "map_for keys incomplete: $_for_keys"
+end
 
 _empty_visited=0
 empty_cb() { _empty_visited=1; }
@@ -1596,7 +1631,9 @@ map_set exit_map c "3"
 _exit_count=0
 exit_after_two() {
   _exit_count=$((_exit_count + 1))
-  [ "$_exit_count" -ge 2 ] && return 1
+  if $_exit_count >= 2
+    return 1
+  end
   return 0
 }
 map_for exit_map exit_after_two
@@ -1609,22 +1646,20 @@ map_delete fd_map q
 _fd_vals=""
 collect_fd() { _fd_vals="${_fd_vals}${R}"; }
 map_for fd_map collect_fd
-case "$_fd_vals" in
-  "13"|"31") pass "map_for skips deleted" ;;
-  *) fail "map_for skips deleted (got: $_fd_vals)" ;;
-esac
+switch $_fd_vals
+case 13|31: pass "map_for skips deleted"
+case *: fail "map_for skips deleted (got: $_fd_vals)"
+end
 
 map_set kr_map foo "FOO"
 map_set kr_map bar "BAR"
 _kr_pairs=""
 check_kr() { _kr_pairs="${_kr_pairs}${K}=${R} "; }
 map_for kr_map check_kr
-case "$_kr_pairs" in
-  *"foo=FOO"*"bar=BAR"*|*"bar=BAR"*"foo=FOO"*)
-    pass "map_for K and R correct" ;;
-  *)
-    fail "map_for K/R mismatch: $_kr_pairs" ;;
-esac
+switch $_kr_pairs
+case *foo=FOO*bar=BAR*|*bar=BAR*foo=FOO*: pass "map_for K and R correct"
+case *: fail "map_for K/R mismatch: $_kr_pairs"
+end
 
 map_set twice_map a "1"
 map_keys twice_map twice_keys1
@@ -1633,7 +1668,7 @@ map_keys twice_map twice_keys2
 array_len twice_keys2; assert_eq "map_keys refresh" "$R" "2"
 
 _large_i=0
-while [ "$_large_i" -lt 50 ]; do
+while $_large_i < 50
   map_set large_map "key$_large_i" "val$_large_i"
   _large_i=$((_large_i + 1))
 done
@@ -1665,27 +1700,27 @@ array_get reuse_keys 0; assert_eq "reuse after delete key" "$R" "c"
 
 map_keys "bad-name" out 2>/dev/null
 ret=$?
-if [ "$ret" != "0" ]; then
+if $ret != 0
   pass "map_keys rejects invalid map name"
 else
   fail "map_keys accepted invalid map name"
-fi
+end
 
 map_keys valid_map "bad-out" 2>/dev/null
 ret=$?
-if [ "$ret" != "0" ]; then
+if $ret != 0
   pass "map_keys rejects invalid output name"
 else
   fail "map_keys accepted invalid output name"
-fi
+end
 
 map_for "bad-name" echo 2>/dev/null
 ret=$?
-if [ "$ret" != "0" ]; then
+if $ret != 0
   pass "map_for rejects invalid name"
 else
   fail "map_for accepted invalid name"
-fi
+end
 
 map_set outer_m a "1"
 map_set outer_m b "2"
@@ -2291,8 +2326,7 @@ case start
   else
     _nb_result="quiet_start"
   end
-case stop
-  _nb_result="stop"
+case stop: _nb_result="stop"
 end
 assert_eq "if inside switch" "$_nb_result" "verbose_start"
 
@@ -2309,8 +2343,7 @@ case debug
   else
     _nb2_result="other"
   end
-case info
-  _nb2_result="info"
+case info: _nb2_result="info"
 end
 assert_eq "if/elif/else inside switch" "$_nb2_result" "debug"
 
@@ -2325,8 +2358,7 @@ case both
   if 2 == 2
     _nb3_b="second"
   end
-case neither
-  _nb3_a="none"
+case neither: _nb3_a="none"
 end
 assert_eq "multiple ifs in switch (a)" "$_nb3_a" "first"
 assert_eq "multiple ifs in switch (b)" "$_nb3_b" "second"
@@ -2336,10 +2368,8 @@ _nb4_enabled=1
 _nb4_type="foo"
 if $_nb4_enabled == 1
   switch $_nb4_type
-  case foo
-    _nb4_result="enabled_foo"
-  case bar
-    _nb4_result="enabled_bar"
+  case foo: _nb4_result="enabled_foo"
+  case bar: _nb4_result="enabled_bar"
   end
 end
 assert_eq "switch inside if" "$_nb4_result" "enabled_foo"
@@ -2368,13 +2398,10 @@ _nb6_inner="y"
 switch $_nb6_outer
 case x
   switch $_nb6_inner
-  case y
-    _nb6_result="x_y"
-  case z
-    _nb6_result="x_z"
+  case y: _nb6_result="x_y"
+  case z: _nb6_result="x_z"
   end
-case w
-  _nb6_result="w"
+case w: _nb6_result="w"
 end
 assert_eq "switch inside switch" "$_nb6_result" "x_y"
 
@@ -2404,8 +2431,7 @@ case loop
     _nb8_result=$((_nb8_result + 1))
     _nb8_count=$((_nb8_count - 1))
   done
-case single
-  _nb8_result=999
+case single: _nb8_result=999
 end
 assert_eq "while inside switch" "$_nb8_result" "3"
 
@@ -2416,8 +2442,7 @@ case iterate
   for _nb9_i in a b c
     _nb9_result="${_nb9_result}${_nb9_i}"
   done
-case skip
-  _nb9_result="skipped"
+case skip: _nb9_result="skipped"
 end
 assert_eq "for inside switch" "$_nb9_result" "abc"
 
@@ -2458,7 +2483,9 @@ _nb12_result=""
 _nb12_outer=1
 _nb12_inner=0
 if $_nb12_outer == 1
-  if $_nb12_inner == 1: _nb12_result="inner_true"
+  if $_nb12_inner == 1
+    _nb12_result="inner_true"
+  end
 else
   _nb12_result="outer_false"
 end
@@ -2468,7 +2495,9 @@ _nb13_result=""
 _nb13_outer=0
 _nb13_inner=1
 if $_nb13_outer == 1
-  if $_nb13_inner == 1: _nb13_result="inner_true"
+  if $_nb13_inner == 1
+    _nb13_result="inner_true"
+  end
 else
   _nb13_result="outer_false"
 end
@@ -2528,8 +2557,7 @@ switch $outer
       case x: echo ax
       case y: echo ay
     end
-  case b
-    echo b
+  case b: echo b
 end
 SHSH
 _compiled="$(sh "$_shsh" -t /tmp/shsh_nested_switch.shsh)"

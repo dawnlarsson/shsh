@@ -1,15 +1,14 @@
-#!/bin/sh
 #
 # shsh comprehensive benchmark suite
 # Compares: bash (with bashisms) vs dash vs zsh
 #
 
-ITERATIONS=${ITERATIONS:-500}
+default ITERATIONS 500
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SHSH_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Colors (if terminal supports it)
-if [ -t 1 ]; then
+if [ -t 1 ]
   BOLD='\033[1m'
   DIM='\033[2m'
   GREEN='\033[32m'
@@ -18,7 +17,7 @@ if [ -t 1 ]; then
   RESET='\033[0m'
 else
   BOLD="" DIM="" GREEN="" YELLOW="" CYAN="" RESET=""
-fi
+end
 
 # Timing function using python for microsecond precision
 now_us() {
@@ -28,17 +27,17 @@ now_us() {
 # Format microseconds as human-readable
 format_time() {
   _us=$1
-  if [ "$_us" -ge 1000000 ]; then
+  if $_us >= 1000000
     _s=$((_us / 1000000))
     _ms=$(((_us % 1000000) / 1000))
     printf "%d.%03ds" "$_s" "$_ms"
-  elif [ "$_us" -ge 1000 ]; then
+  elif $_us >= 1000
     _ms=$((_us / 1000))
     _r=$((_us % 1000))
     printf "%d.%dms" "$_ms" "$((_r / 100))"
   else
     printf "%dµs" "$_us"
-  fi
+  end
 }
 
 # Calculate speedup ratio
@@ -74,32 +73,32 @@ check_shells() {
   printf "${BOLD}Checking available shells...${RESET}\n"
   SHELLS=""
   
-  if command -v bash >/dev/null 2>&1; then
+  if command -v bash >/dev/null 2>&1
     SHELLS="$SHELLS bash"
     printf "  bash:       $(bash --version | head -1)\n"
-  fi
+  end
   
-  if command -v dash >/dev/null 2>&1; then
+  if command -v dash >/dev/null 2>&1
     SHELLS="$SHELLS dash"
     printf "  dash:       available\n"
-  fi
+  end
   
-  if command -v zsh >/dev/null 2>&1; then
+  if command -v zsh >/dev/null 2>&1
     SHELLS="$SHELLS zsh"
     printf "  zsh:        $(zsh --version)\n"
-  fi
+  end
   
-  if command -v sh >/dev/null 2>&1; then
+  if command -v sh >/dev/null 2>&1
     printf "  sh:         $(sh --version 2>&1 | head -1 || echo 'available')\n"
-  fi
+  end
 }
 
 # Generate the shsh runtime for embedding
 generate_runtime() {
-  sed -n '/^# __RUNTIME_START__$/,/^# __RUNTIME_END__$/p' "$SHSH_DIR/shsh.sh"
+  sed -n '/^# __RUNTIME_START__$/,/^# __RUNTIME_END__$/p' "./shsh.sh"
 }
 
-RUNTIME=$(generate_runtime)
+RUNTIME=$(sed -n '/^# __RUNTIME_START__$/,/^# __RUNTIME_END__$/p' "./shsh.sh")
 
 ########################################
 # BENCHMARK: String Functions
@@ -1020,17 +1019,17 @@ done"
 # Format time for summary table (compact)
 format_time_compact() {
   _us=$1
-  if [ "$_us" -ge 1000000 ]; then
+  if $_us >= 1000000
     _s=$((_us / 1000000))
     _ms=$(((_us % 1000000) / 1000))
     printf "%d.%02ds" "$_s" "$((_ms / 10))"
-  elif [ "$_us" -ge 1000 ]; then
+  elif $_us >= 1000
     _ms=$((_us / 1000))
     _r=$((_us % 1000))
     printf "%d.%dms" "$_ms" "$((_r / 100))"
   else
     printf "%dµs" "$_us"
-  fi
+  end
 }
 
 # Print a summary row with timing data
@@ -1041,14 +1040,14 @@ print_summary_row() {
   printf "  %-22s" "$_row_name"
   for shell in $SHELLS; do
     eval "_t=\$${_time_var_prefix}_$shell"
-    if [ -n "$_t" ]; then
+    if "$_t" != ""
       _formatted=$(format_time_compact "$_t")
       eval "_base=\$${_time_var_prefix}_$_baseline"
       _ratio=$(calc_speedup "$_base" "$_t")
       printf "%-18s" "$_formatted ($_ratio)"
     else
       printf "%-18s" "N/A"
-    fi
+    end
   done
   printf "\n"
 }
@@ -1058,11 +1057,11 @@ print_summary() {
   
   printf "\n${BOLD}Performance by shell (time + speedup vs baseline):${RESET}\n\n"
   
-  if [ -n "$time_str_starts_dash" ]; then
+  if "$time_str_starts_dash" != ""
     _baseline="dash"
   else
     _baseline="bash"
-  fi
+  end
   
   printf "%-24s" "Test"
   for shell in $SHELLS; do
@@ -1147,9 +1146,6 @@ print_summary() {
   printf "\n${DIM}(Time shown with speedup ratio vs $_baseline baseline. Higher ratio = faster)${RESET}\n"
 }
 
-########################################
-# MAIN
-########################################
 main() {
   printf "${BOLD}shsh Benchmark Suite${RESET}\n"
   printf "Iterations: ${ITERATIONS}\n"
