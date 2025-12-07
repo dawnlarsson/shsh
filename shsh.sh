@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.25.0"
+VERSION="0.26.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -464,6 +464,32 @@ emit_condition() {
   fi
 }
 
+emit_inline_statement() {
+  inline_indent="$1"
+  inline_statement="$2"
+  if is "\"$inline_statement\" == \"\""; then
+    return
+  fi
+
+  str_ltrim "$inline_statement"; inline_statement="$R"
+
+  if str_starts "$inline_statement" "if "; then
+    str_after "$inline_statement" "if "; inline_rest="$R"
+    if str_contains "$inline_rest" "$COLON_SPACE"; then
+      str_before "$inline_rest" "$COLON_SPACE"; inline_condition="$R"
+      str_after "$inline_rest" "$COLON_SPACE"; inline_body="$R"
+      str_ltrim "$inline_body"; inline_body="$R"
+      emit_condition "if" "$inline_condition" "$inline_indent" "$SEMICOLON_THEN"
+      emit_with_try_check "${inline_indent}  ${inline_body}"
+      single_line_if_active=1
+      single_line_if_indent="$inline_indent"
+      return
+    fi
+  fi
+
+  emit_with_try_check "${inline_indent}${inline_statement}"
+}
+
 transform_line() {
   line="$1"
   str_ltrim "$line"; stripped="$R"
@@ -622,6 +648,7 @@ transform_line() {
       if str_contains "$rest" "$COLON_SPACE"; then
         str_before "$rest" "$COLON_SPACE"; maybe_pattern="$R"
         str_after "$rest" "$COLON_SPACE"; maybe_statement="$R"
+        str_ltrim "$maybe_statement"; maybe_statement="$R"
         
         is_single_line=0
         if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
@@ -629,15 +656,14 @@ transform_line() {
             is_single_line=1
           fi
         else
-          str_ltrim "$maybe_statement"
-          if is "\"$R\" != \"\""; then
+          if is "\"$maybe_statement\" != \"\""; then
             is_single_line=1
           fi
         fi
         
         if is "$is_single_line == 1"; then
           printf '%s\n' "${indent}${maybe_pattern})"
-          printf '%s\n' "${indent}  ${maybe_statement}"
+          emit_inline_statement "${indent}  " "$maybe_statement"
         else
           printf '%s\n' "${indent}${rest})"
         fi
@@ -660,7 +686,7 @@ transform_line() {
       str_ltrim "$statement"; statement="$R"
       printf "${indent}*)\n"
       if is "\"$statement\" != \"\""; then
-        printf '%s\n' "${indent}  ${statement}"
+        emit_inline_statement "${indent}  " "$statement"
       fi
     else
       printf '%s\n' "$line"
@@ -985,7 +1011,7 @@ info() {
 
 case $1 in
   -c)
-           eval "$(printf "$2\n" | transform)"
+    eval "$(printf "$2\n" | transform)"
     ;;
   -t)
     if is "\"$2\" == \"\""; then
@@ -1014,13 +1040,13 @@ case $1 in
     fi
     ;;
   -v)
-           printf "shsh $VERSION\n"
+    printf "shsh $VERSION\n"
     ;;
   version)
-      printf "shsh $VERSION\n"
+    printf "shsh $VERSION\n"
     ;;
   -)
-            eval "$(transform)"
+    eval "$(transform)"
     ;;
   install)
     shell="$HOME/.profile"
@@ -1033,7 +1059,7 @@ case $1 in
         fi
         ;;
       */zsh)
-         shell="$HOME/.zshrc"
+        shell="$HOME/.zshrc"
         ;;
       */fish)
         shell="$HOME/.config/fish/config.fish"

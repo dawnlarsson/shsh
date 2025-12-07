@@ -1294,14 +1294,64 @@ done
 assert_eq "single-line switch in loop" "$_sw_loop" "ABC"
 
 echo ""
+echo "=== Single-Line Switch Nested Single-Liners ==="
+
+_nested_default=""
+_skip=0
+switch "x"
+  default: if $_skip == 0: _nested_default="works"
+end
+assert_eq "default: if:" "$_nested_default" "works"
+
+_nested_default_skip="stay"
+_skip=1
+switch "x"
+  default: if $_skip == 0: _nested_default_skip="changed"
+end
+assert_eq "default: if skip" "$_nested_default_skip" "stay"
+
+_nested_case=""
+_flag=1
+switch "a"
+  case a: if $_flag == 1: _nested_case="yes"
+  default: _nested_case="no"
+end
+assert_eq "case: if:" "$_nested_case" "yes"
+
+_nested_case_fallback="none"
+_flag=0
+switch "b"
+  case a: if $_flag == 1: _nested_case_fallback="yes"
+  default: _nested_case_fallback="no"
+end
+assert_eq "case: if fallback" "$_nested_case_fallback" "no"
+
+_inline_chain=""
+switch "branch"
+  default: if 0 == 1: _inline_chain="if"
+    elif 2 == 2: _inline_chain="elif"
+    else: _inline_chain="else"
+end
+assert_eq "inline nested elif chain" "$_inline_chain" "elif"
+
+_inline_after="start"
+switch "z"
+  default: if 1 == 1: _inline_after="set"
+  _inline_after="${_inline_after}-post"
+end
+assert_eq "inline nested if closes before following body" "$_inline_after" "set-post"
+
+echo ""
 echo "=== CLI edge cases ==="
 
-if [ -f "${0%/*}/../shsh.sh" ]; then
+if [ -f "$_shsh" ]; then
+  _shsh_path="$_shsh"
+elif [ -f "${0%/*}/../shsh.sh" ]; then
   _shsh_path="${0%/*}/../shsh.sh"
 elif [ -f "/usr/local/bin/shsh" ]; then
   _shsh_path="/usr/local/bin/shsh"
 else
-  _shsh_path="shsh"
+  _shsh_path="$_shsh"
 end
 _test_file="/tmp/shsh_cli_test_$$.shsh"
 printf '%s\n' 'x=1' > "$_test_file"
