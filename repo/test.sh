@@ -50,6 +50,20 @@ count=0; counter() { count=$((count + 1)); }
 array_for arr counter; assert_eq "array_for count" "$count" "3"
 array_clear arr; array_len arr; assert_eq "array_clear" "$R" "0"
 
+array_add full_clear "keep"
+array_add full_clear "drop"
+array_clear_full full_clear
+array_len full_clear; assert_eq "array_clear_full len" "$R" "0"
+array_get full_clear 0; full_clear_ret=$?
+if $full_clear_ret != 0
+  pass "array_clear_full empties storage"
+else
+  fail "array_clear_full should remove entries"
+end
+array_add full_clear "again"
+array_len full_clear; assert_eq "array_clear_full reuse len" "$R" "1"
+array_get full_clear 0; assert_eq "array_clear_full reuse value" "$R" "again"
+
 # empty array iteration
 array_clear empty_arr
 empty_count=0
@@ -596,6 +610,15 @@ file_write /tmp/shsh_special.txt 'line with $VAR and `cmd`'
 file_read /tmp/shsh_special.txt
 assert_eq "file special chars" "$R" 'line with $VAR and `cmd`'
 
+fmt_str="%s %d %% literal"
+file_write /tmp/shsh_fmt.txt "$fmt_str"
+file_read /tmp/shsh_fmt.txt
+assert_eq "file_write format literals" "$R" "$fmt_str"
+file_append /tmp/shsh_fmt.txt "$fmt_str"
+file_read /tmp/shsh_fmt.txt
+assert_eq "file_append format literals" "$R" "$fmt_str
+$fmt_str"
+
 echo ""
 echo "=== AST Basics ==="
 
@@ -795,6 +818,18 @@ assert_eq "bit_8 max" "$got" "ff"
 
 got=$(hex_capture 'bit_16 0xffff')
 assert_eq "bit_16 max" "$got" "ffff"
+
+got=$(hex_capture 'ENDIAN=big bit_64 0x1122334455667788')
+assert_eq "bit_64 BE" "$got" "1122334455667788"
+
+got=$(hex_capture 'bit_128 0x112233445566778899aabbccddeeff00')
+assert_eq "bit_128 LE" "$got" "00ffeeddccbbaa998877665544332211"
+
+got=$(hex_capture 'ENDIAN=big bit_128 0x112233445566778899aabbccddeeff00')
+assert_eq "bit_128 BE" "$got" "112233445566778899aabbccddeeff00"
+
+got=$(hex_capture 'bit_128 0xff')
+assert_eq "bit_128 zero pad" "$got" "ff000000000000000000000000000000"
 
 echo ""
 echo "=== Edge Cases ==="
@@ -2439,7 +2474,7 @@ else
 end
 assert_eq "single-line if, outer else taken" "$_nb13_result" "outer_false"
 
-rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt
+rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt /tmp/shsh_fmt.txt
 
 echo ""
 echo "=== Script Argument Passing ==="

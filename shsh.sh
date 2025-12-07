@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.27.0"
+VERSION="0.28.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -142,8 +142,8 @@ file_read() {
   done < "$1"
 }
 
-file_write() { printf "$2\n" > "$1"; }
-file_append() { printf "$2\n" >> "$1"; }
+file_write() { printf '%s\n' "$2" > "$1"; }
+file_append() { printf '%s\n' "$2" >> "$1"; }
 file_exists() { [ -f "$1" ]; }
 dir_exists() { [ -d "$1" ]; }
 file_executable() { [ -x "$1" ]; }
