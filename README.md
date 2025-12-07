@@ -1,7 +1,7 @@
 # shsh
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing all 454 tests.
+Passing all 421 tests.
 
 - **Clean Syntax** — `if`/`elif`/`else`/`end`, `switch`/`case`/`default`/`end`, `try`/`catch`/`end`
 - **Comparisons** — `==`, `!=`, `<`, `>`, `<=`, `>=` for strings and numbers

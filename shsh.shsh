@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.26.0"
+VERSION="0.25.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -429,14 +429,17 @@ emit_with_try_check() {
   if in_try_block; then
     current_try_depth
     printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$1" "$R" "$R"
-  else: printf '%s\n' "$1"
+  else
+    printf '%s\n' "$1"
   fi
 }
 
 is_comparison() {
   switch $1
-  case *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*: return 0
-  default: return 1
+  case *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*
+    return 0
+  default
+    return 1
   end
 }
 
@@ -530,7 +533,8 @@ transform_line() {
       single_line_if_active=0
     end
   
-  case "else": printf "${indent}else\n"
+  case "else"
+    printf "${indent}else\n"
   
   case "while "*
     str_after "$stripped" "while "; expression="$R"
@@ -544,8 +548,10 @@ transform_line() {
         current_try_depth
         printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
       end
-    elif str_contains "$stripped" "$SEMICOLON_DO": printf '%s\n' "$line"
-    else: emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
+    elif str_contains "$stripped" "$SEMICOLON_DO"
+      printf '%s\n' "$line"
+    else
+      emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
     end
   
   case "for "*
@@ -573,7 +579,8 @@ transform_line() {
       printf "${indent}_shsh_brk_$try_depth=1; done\n${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
       pop
       push c
-    else: printf '%s\n' "$line"
+    else
+      printf '%s\n' "$line"
     end
   
   case "switch "*
@@ -604,32 +611,28 @@ transform_line() {
         
         if $is_single_line == 1
           printf '%s\n' "${indent}${maybe_pattern})"
-          transform_line "${indent}  ${maybe_statement}"
-        else: printf '%s\n' "${indent}${rest})"
+          printf '%s\n' "${indent}  ${maybe_statement}"
+        else
+          printf '%s\n' "${indent}${rest})"
         end
-      else: printf '%s\n' "${indent}${rest})"
+      else
+        printf '%s\n' "${indent}${rest})"
       end
-    else: printf '%s\n' "$line"
-    end
-
-  case *" = "*
-    str_before "$stripped" " = "; _tl_var="$R"
-    str_after "$stripped" " = "; _tl_call="$R"
-    switch $_tl_var
-      case *[!a-zA-Z0-9_]*|""|[0-9]*: emit_with_try_check "$line"
-      default: printf '%s\n' "${indent}${_tl_call}; ${_tl_var}=\"\$R\""
+    else
+      printf '%s\n' "$line"
     end
   
   case "default:"*
     peek
     if "$R" == "s"
-      if ! switch_is_first: printf '%s\n' "${indent}  ;;"
+      if ! switch_is_first: printf "${indent}  ;;\n"
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
-      printf '%s\n' "${indent}*)"
-      if "$statement" != "": transform_line "${indent}  ${statement}"
-    else: emit_with_try_check "$line"
+      printf "${indent}*)\n"
+      if "$statement" != "": printf '%s\n' "${indent}  ${statement}"
+    else
+      printf '%s\n' "$line"
     end
   
   case "default"
@@ -638,7 +641,8 @@ transform_line() {
       if ! switch_is_first: printf "${indent}  ;;\n"
       switch_set_not_first
       printf "${indent}*)\n"
-    else: printf '%s\n' "$line"
+    else
+      printf '%s\n' "$line"
     end
   
   case "end"
@@ -720,7 +724,8 @@ transform_line() {
         printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
     end
   
-  default: emit_with_try_check "$line"
+  default
+    emit_with_try_check "$line"
   
   end
 }
@@ -762,8 +767,12 @@ emit_runtime_stripped() {
       str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
       _ers_cur_body=""
-    case "}": eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\"" _ers_cur_fn=""
-    default: if "$_ers_cur_fn" != "": _ers_cur_body="$_ers_cur_body $_ers_line"
+    case "}"
+      # Store the function body for dependency analysis
+      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
+      _ers_cur_fn=""
+    default
+      if "$_ers_cur_fn" != "": _ers_cur_body="$_ers_cur_body $_ers_line"
     end
   done < "$0"
   
@@ -774,7 +783,8 @@ emit_runtime_stripped() {
     for _ers_other in $_ers_all_fns
       if "$_ers_fn" != "$_ers_other"
         switch "$_ers_body"
-        case *"$_ers_other"*: _ers_deps="$_ers_deps $_ers_other"
+        case *"$_ers_other"*
+          _ers_deps="$_ers_deps $_ers_other"
         end
       end
     done
@@ -782,10 +792,12 @@ emit_runtime_stripped() {
   done
   
   # Phase 3: Check which functions the source uses
-  _rt_needed=" is "
+  _rt_needed=" is " # is() always needed for shsh conditionals
   for _ers_fn in $_ers_all_fns
     switch "$_ers_source"
-    case *"$_ers_fn"*: _rt_need_fn "$_ers_fn"
+    case *"$_ers_fn"*
+      # Mark as needed and resolve dependencies recursively
+      _rt_need_fn "$_ers_fn"
     end
   done
   
@@ -811,13 +823,16 @@ emit_runtime_stripped() {
           case *" $_ers_fn "*
             _ers_skip=0
             printf "$_ers_line\n"
-          default: _ers_skip=1
+          default
+            _ers_skip=1
           end
         case "}"
           if $_ers_skip == 0: printf "$_ers_line\n"
           _ers_skip=0
-        case "": if $_ers_skip == 0: printf "\n"
-        default: if $_ers_skip == 0: printf '%s\n' "$_ers_line"
+        case ""
+          if $_ers_skip == 0: printf "\n"
+        default
+          if $_ers_skip == 0: printf '%s\n' "$_ers_line"
         end
       end
     end
@@ -950,7 +965,8 @@ switch $1
     _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
     if "$_new_ver" == "$_old_ver"
       printf "warning: version unchanged (%s) - update may have failed\n" "$_old_ver" >&2
-    else: printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
+    else
+      printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
     end
   case "": info
   case -*: info
