@@ -1,7 +1,7 @@
 # shsh
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing all 427 tests.
+Passing all 439 tests.
 
 - **Clean Syntax** — `if`/`elif`/`else`/`end`, `switch`/`case`/`default`/`end`, `try`/`catch`/`end`
 - **Comparisons** — `==`, `!=`, `<`, `>`, `<=`, `>=` for strings and numbers
@@ -39,7 +39,7 @@ shsh -t script.sh        # transform only (no toolkit)
 
 ### Building shsh itself
 ```sh
-sh shsh.sh -t shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh
+sh shsh.sh -t shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh && chmod +rwx shsh.sh
 ```
 
 ---

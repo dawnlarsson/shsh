@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.26.0"
+VERSION="0.27.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -146,6 +146,8 @@ file_write() { printf "$2\n" > "$1"; }
 file_append() { printf "$2\n" >> "$1"; }
 file_exists() { [ -f "$1" ]; }
 dir_exists() { [ -d "$1" ]; }
+file_executable() { [ -x "$1" ]; }
+path_writable() { [ -w "$1" ]; }
 
 file_lines() {
   _shsh_check_name "$2" || return 1
@@ -464,6 +466,14 @@ emit_condition() {
   fi
 }
 
+nonempty() {
+  if is "\"$1\" == \"\""; then
+    return 1
+  else
+    return 0
+  fi
+}
+
 emit_inline_statement() {
   inline_indent="$1"
   inline_statement="$2"
@@ -483,6 +493,21 @@ emit_inline_statement() {
       emit_with_try_check "${inline_indent}  ${inline_body}"
       single_line_if_active=1
       single_line_if_indent="$inline_indent"
+      return
+    fi
+  elif str_starts "$inline_statement" "while "; then
+    str_after "$inline_statement" "while "; inline_rest="$R"
+    if str_contains "$inline_rest" "$COLON_SPACE"; then
+      str_before "$inline_rest" "$COLON_SPACE"; inline_condition="$R"
+      str_after "$inline_rest" "$COLON_SPACE"; inline_body="$R"
+      str_ltrim "$inline_body"; inline_body="$R"
+      emit_condition "while" "$inline_condition" "$inline_indent" "$SEMICOLON_DO"
+      emit_with_try_check "${inline_indent}  ${inline_body}"
+      printf "${inline_indent}done\n"
+      if in_try_block; then
+        current_try_depth
+        printf "${inline_indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
+      fi
       return
     fi
   fi
@@ -665,9 +690,17 @@ transform_line() {
           printf '%s\n' "${indent}${maybe_pattern})"
           emit_inline_statement "${indent}  " "$maybe_statement"
         else
+          if str_ends "$rest" ":"; then
+            str_before_last "$rest" ":"
+            rest="$R"
+          fi
           printf '%s\n' "${indent}${rest})"
         fi
       else
+        if str_ends "$rest" ":"; then
+          str_before_last "$rest" ":"
+          rest="$R"
+        fi
         printf '%s\n' "${indent}${rest})"
       fi
     else
@@ -830,7 +863,7 @@ transform() {
   switch_first_case_stack=""
   try_depth=0
   
-  while IFS= read -r current_line || [ -n "$current_line" ]; do
+  while IFS= read -r current_line || nonempty "$current_line"; do
     transform_line "$current_line"
   done
   
@@ -850,7 +883,7 @@ emit_runtime_stripped() {
   
   # Phase 1: Extract all runtime functions and their bodies
   _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
-  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
+  while IFS= read -r _ers_line || nonempty "$_ers_line"; do
     if str_starts "$_ers_line" "# __RUNTIME_START__"; then
       _ers_in_rt=1; continue
     fi
@@ -903,7 +936,6 @@ emit_runtime_stripped() {
   for _ers_fn in $_ers_all_fns; do
     case "$_ers_source" in
     *"$_ers_fn"*)
-      # Mark as needed and resolve dependencies recursively
       _rt_need_fn "$_ers_fn"
       ;;
     esac
@@ -911,7 +943,7 @@ emit_runtime_stripped() {
   
   # Phase 4: Emit only needed functions
   _ers_emit=0 _ers_skip=0
-  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
+  while IFS= read -r _ers_line || nonempty "$_ers_line"; do
     case $_ers_emit in
     0)
       if str_starts "$_ers_line" "# __RUNTIME_START__"; then
@@ -976,7 +1008,7 @@ _rt_need_fn() {
 
 emit_runtime() {
   _er_emit=0
-  while IFS= read -r _er_line || [ -n "$_er_line" ]; do
+  while IFS= read -r _er_line || nonempty "$_er_line"; do
     case $_er_emit in
     0)
       if str_starts "$_er_line" "# __RUNTIME_START__"; then
@@ -1016,6 +1048,8 @@ case $1 in
   -t)
     if is "\"$2\" == \"\""; then
       transform
+    elif is "\"$2\" == \"-\""; then
+      transform
     else
       transform < "$2"
     fi
@@ -1052,7 +1086,7 @@ case $1 in
     shell="$HOME/.profile"
     case $SHELL in
       */bash)
-        if [ -f "$HOME/.bash_profile" ]; then
+        if file_exists "$HOME/.bash_profile"; then
           shell="$HOME/.bash_profile"
         else
           shell="$HOME/.bashrc"
@@ -1066,7 +1100,7 @@ case $1 in
       ;;
     esac
 
-    if [ -w /usr/local/bin ]; then
+    if path_writable "/usr/local/bin"; then
       dest=/usr/local/bin/shsh
     else
       mkdir -p "$HOME/.local/bin"
@@ -1090,20 +1124,43 @@ case $1 in
     ;;
   uninstall)
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
-      if [ -f "$loc" ]; then
+      if file_exists "$loc"; then
         rm "$loc" && printf "removed: $loc\n"
       fi
     done
     ;;
   update)
     _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
-    _dest="/usr/local/bin/shsh"
     _old_ver="$VERSION"
+    _dest=""
+
+    if file_executable "/usr/local/bin/shsh"; then
+      _dest="/usr/local/bin/shsh"
+    elif file_executable "$HOME/.local/bin/shsh"; then
+      _dest="$HOME/.local/bin/shsh"
+    elif path_writable "/usr/local/bin"; then
+      _dest="/usr/local/bin/shsh"
+    else
+      mkdir -p "$HOME/.local/bin"
+      _dest="$HOME/.local/bin/shsh"
+    fi
+
+    _needs_sudo=0
+    if str_starts "$_dest" "/usr/local/"; then
+      if ! path_writable "$(dirname "$_dest")"; then
+        _needs_sudo=1
+      fi
+    fi
+
     printf "downloading shsh from github...\n"
     if command -v curl >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if curl -fsSL "$_url" -o "$_tmp"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        if is "$_needs_sudo == 1"; then
+          sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        else
+          mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
+        fi
       else
         rm -f "$_tmp"
         printf "error: download failed\n" >&2
@@ -1112,7 +1169,11 @@ case $1 in
     elif command -v wget >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if wget -qO "$_tmp" "$_url"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        if is "$_needs_sudo == 1"; then
+          sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        else
+          mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
+        fi
       else
         rm -f "$_tmp"
         printf "error: download failed\n" >&2

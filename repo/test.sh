@@ -67,6 +67,18 @@ array_len del_test; assert_eq "array_delete len" "$R" "2"
 array_get del_test 0; assert_eq "array_delete idx0" "$R" "a"
 array_get del_test 1; assert_eq "array_delete idx1" "$R" "c"
 
+# array_remove rejects negative index
+array_clear neg_idx
+array_add neg_idx "keep"
+array_remove neg_idx -1
+neg_ret=$?
+array_len neg_idx; assert_eq "array_remove negative len" "$R" "1"
+if $neg_ret != 0
+  pass "array_remove negative index errors"
+else
+  fail "array_remove negative index should error"
+end
+
 # array_remove (explicit shifting)
 array_clear rm_test
 array_add rm_test "a"
@@ -168,6 +180,14 @@ else
   else
     fail "map accepted invalid key"
   end
+end
+
+map_set emptykey "" "val" 2>/dev/null
+ret=$?
+if $ret != 0
+  pass "map rejects empty key"
+else
+  fail "map accepted empty key"
 end
 
 echo ""
@@ -1337,12 +1357,38 @@ assert_eq "inline nested elif chain" "$_inline_chain" "elif"
 _inline_after="start"
 switch "z"
   default: if 1 == 1: _inline_after="set"
-  _inline_after="${_inline_after}-post"
+_inline_after="${_inline_after}-post"
 end
 assert_eq "inline nested if closes before following body" "$_inline_after" "set-post"
 
+_sl_while=""
+_w=0
+while $_w < 3: _sl_while="${_sl_while}${_w}"; _w=$((_w + 1))
+assert_eq "single-line while increments" "$_sl_while" "012"
+
+_switch_while=""
+switch "go"
+  case go:
+    _sw_n=1
+    while $_sw_n <= 3: _switch_while="${_switch_while}${_sw_n}"; _sw_n=$((_sw_n + 1))
+end
+assert_eq "single-line while inside switch" "$_switch_while" "123"
+
 echo ""
 echo "=== CLI edge cases ==="
+
+_usage_status=0
+_usage_out=$(sh "$_shsh" 2>&1) || _usage_status=$?
+_usage_expected="usage: shsh"
+if $_usage_status == 0
+  if str_contains "$_usage_out" "$_usage_expected"
+    pass "shsh with no args prints usage"
+  else
+    fail "shsh with no args missing usage text"
+  end
+else
+  fail "shsh with no args failed (status $_usage_status)"
+end
 
 if [ -f "$_shsh" ]; then
   _shsh_path="$_shsh"
@@ -1353,6 +1399,22 @@ elif [ -f "/usr/local/bin/shsh" ]; then
 else
   _shsh_path="$_shsh"
 end
+
+_dash_c_out=$("$_shsh_path" -c 'echo hi')
+if "$_dash_c_out" == "hi"
+  pass "-c prints inline output"
+else
+  fail "-c prints inline output (got: '$_dash_c_out')"
+end
+
+_stdin_code="x=7"
+_stdin_t_out=$(printf "%s\n" "$_stdin_code" | "$_shsh_path" -t -)
+if "$_stdin_t_out" == "$_stdin_code"
+  pass "-t reads from stdin"
+else
+  fail "-t reads from stdin (got: '$_stdin_t_out')"
+end
+
 _test_file="/tmp/shsh_cli_test_$$.shsh"
 printf '%s\n' 'x=1' > "$_test_file"
 _transform_out=$("$_shsh_path" -t "$_test_file" 2>&1)
@@ -1382,6 +1444,35 @@ if "$_dashopt_out" == "-d"
   pass "printf dash-letter works"
 else
   fail "printf dash-letter works (got: '$_dashopt_out')"
+end
+
+echo ""
+echo "=== Runtime Helpers ==="
+
+_rt_tmp="/tmp/shsh_rt_$$"
+printf '%s\n' "echo hi" > "$_rt_tmp"
+if file_executable "$_rt_tmp"
+  fail "file_executable false negative (non-exec)"
+else
+  pass "file_executable detects non-exec"
+end
+chmod +x "$_rt_tmp"
+if file_executable "$_rt_tmp"
+  pass "file_executable detects exec"
+else
+  fail "file_executable misses exec"
+end
+rm -f "$_rt_tmp"
+
+if path_writable "$PWD"
+  pass "path_writable current dir"
+else
+  fail "path_writable current dir"
+end
+if path_writable "/root"
+  fail "path_writable protected path"
+else
+  pass "path_writable protected path"
 end
 
 echo ""
