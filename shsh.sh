@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.24.1"
+VERSION="0.24.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -527,7 +527,7 @@ emit_with_try_check() {
     current_try_depth
     printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$1" "$R" "$R"
   else
-    printf "$1\n"
+    printf '%s\n' "$1"
   fi
 }
 
@@ -555,9 +555,9 @@ emit_condition() {
   keyword="$1" condition="$2" indent="$3" suffix="$4"
   if is_comparison "$condition"; then
     escape_quotes "$condition"
-    printf "${indent}${keyword} is \"$R\"${suffix}\n"
+    printf '%s\n' "${indent}${keyword} is \"$R\"${suffix}"
   else
-    printf "${indent}${keyword} ${condition}${suffix}\n"
+    printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
   fi
 }
 
@@ -593,7 +593,7 @@ transform_line() {
         push i
       fi
     else
-      printf "${single_line_if_indent}fi\n"
+      printf '%s\n' "${single_line_if_indent}fi"
       single_line_if_active=0
     fi
   fi
@@ -610,7 +610,7 @@ transform_line() {
       single_line_if_active=1
       single_line_if_indent="$indent"
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
-      printf "$line\n"
+      printf '%s\n' "$line"
       push i
     else
       emit_condition "if" "$rest" "$indent" "$SEMICOLON_THEN"
@@ -626,7 +626,7 @@ transform_line() {
       emit_condition "elif" "$condition" "$indent" "$SEMICOLON_THEN"
       emit_with_try_check "${indent}  ${statement}"
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
-      printf "$line\n"
+      printf '%s\n' "$line"
     else
       emit_condition "elif" "$rest" "$indent" "$SEMICOLON_THEN"
     fi
@@ -635,16 +635,16 @@ transform_line() {
   "else:"*)
     str_after "$stripped" "else:"; statement="$R"
     str_ltrim "$statement"; statement="$R"
-    printf "${indent}else\n"
+    printf '%s\n' "${indent}else"
     emit_with_try_check "${indent}  ${statement}"
     if is "$single_line_if_active == 1"; then
-      printf "${indent}fi\n"
+      printf '%s\n' "${indent}fi"
       single_line_if_active=0
     fi
   
     ;;
   "else")
-    printf "${indent}else\n"
+    printf '%s\n' "${indent}else"
   
     ;;
   "while "*)
@@ -654,13 +654,13 @@ transform_line() {
       str_after "$expression" "$COLON_SPACE"; statement="$R"
       emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
       emit_with_try_check "${indent}  ${statement}"
-      printf "${indent}done\n"
+      printf '%s\n' "${indent}done"
       if in_try_block; then
         current_try_depth
-        printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
+        printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
       fi
     elif str_contains "$stripped" "$SEMICOLON_DO"; then
-      printf "$line\n"
+      printf '%s\n' "$line"
     else
       emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
     fi
@@ -668,41 +668,41 @@ transform_line() {
     ;;
   "for "*)
     if str_contains "$stripped" "$SEMICOLON_DO"; then
-      printf "$line\n"
+      printf '%s\n' "$line"
     else
-      printf "${indent}${stripped}; do\n"
+      printf '%s\n' "${indent}${stripped}; do"
     fi
   
     ;;
   "done")
-    printf "${indent}done\n"
+    printf '%s\n' "${indent}done"
     if in_try_block; then
       current_try_depth
-      printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
+      printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
     fi
   
     ;;
   "try")
     try_depth_inc
-    printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
+    printf '%s\n' "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do"
     push t
   
     ;;
   "catch")
     peek
     if is "\"$R\" == \"t\""; then
-      printf "${indent}_shsh_brk_$try_depth=1; done\n"
-      printf "${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
+      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
+      printf '%s\n' "${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth"
       pop
       push c
     else
-      printf "$line\n"
+      printf '%s\n' "$line"
     fi
   
     ;;
   "switch "*)
     str_after "$stripped" "switch "; expression="$R"
-    printf "${indent}case $expression in\n"
+    printf '%s\n' "${indent}case $expression in"
     push s
     switch_push_first
   
@@ -713,7 +713,7 @@ transform_line() {
       str_after "$stripped" "case "; rest="$R"
       
       if ! switch_is_first; then
-        printf "${indent}  ;;\n"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       
@@ -734,16 +734,16 @@ transform_line() {
         fi
         
         if is "$is_single_line == 1"; then
-          printf "${indent}${maybe_pattern})\n"
-          printf "${indent}  ${maybe_statement}\n"
+          printf '%s\n' "${indent}${maybe_pattern})"
+          printf '%s\n' "${indent}  ${maybe_statement}"
         else
-          printf "${indent}${rest})\n"
+          printf '%s\n' "${indent}${rest})"
         fi
       else
-        printf "${indent}${rest})\n"
+        printf '%s\n' "${indent}${rest})"
       fi
     else
-      printf "$line\n"
+      printf '%s\n' "$line"
     fi
   
     ;;
@@ -751,17 +751,17 @@ transform_line() {
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf "${indent}  ;;\n"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
-      printf "${indent}*)\n"
+      printf '%s\n' "${indent}*)"
       if is "\"$statement\" != \"\""; then
-        printf "${indent}  ${statement}\n"
+        printf '%s\n' "${indent}  ${statement}"
       fi
     else
-      printf "$line\n"
+      printf '%s\n' "$line"
     fi
   
     ;;
@@ -769,31 +769,31 @@ transform_line() {
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf "${indent}  ;;\n"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
-      printf "${indent}*)\n"
+      printf '%s\n' "${indent}*)"
     else
-      printf "$line\n"
+      printf '%s\n' "$line"
     fi
   
     ;;
   "end")
     peek
     if is "\"$R\" == \"s\""; then
-      printf "${indent}  ;;\n"
-      printf "${indent}esac\n"
+      printf '%s\n' "${indent}  ;;"
+      printf '%s\n' "${indent}esac"
       switch_pop_first
       pop
     elif is "\"$R\" == \"i\""; then
-      printf "${indent}fi\n"
+      printf '%s\n' "${indent}fi"
       pop
     elif is "\"$R\" == \"c\""; then
-      printf "${indent}fi\n"
+      printf '%s\n' "${indent}fi"
       try_depth_dec
       pop
     elif is "\"$R\" == \"t\""; then
-      printf "${indent}_shsh_brk_$try_depth=1; done\n"
+      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
       try_depth_dec
       pop
     fi
@@ -803,10 +803,10 @@ transform_line() {
     str_before "$stripped" "++"; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
-        printf "${indent}${variable}=\$((${variable} + 1))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
       ;;
     esac
   
@@ -815,10 +815,10 @@ transform_line() {
     str_before "$stripped" "--"; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
-        printf "${indent}${variable}=\$((${variable} - 1))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
       ;;
     esac
   
@@ -827,11 +827,11 @@ transform_line() {
     str_before "$stripped" " += "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
         str_after "$stripped" " += "; value="$R"
-        printf "${indent}${variable}=\$((${variable} + ${value}))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
       ;;
     esac
   
@@ -840,11 +840,11 @@ transform_line() {
     str_before "$stripped" " -= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
         str_after "$stripped" " -= "; value="$R"
-        printf "${indent}${variable}=\$((${variable} - ${value}))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
       ;;
     esac
   
@@ -853,11 +853,11 @@ transform_line() {
     str_before "$stripped" " *= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
         str_after "$stripped" " *= "; value="$R"
-        printf "${indent}${variable}=\$((${variable} * ${value}))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
       ;;
     esac
   
@@ -866,11 +866,11 @@ transform_line() {
     str_before "$stripped" " /= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
         str_after "$stripped" " /= "; value="$R"
-        printf "${indent}${variable}=\$((${variable} / ${value}))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
       ;;
     esac
   
@@ -879,11 +879,11 @@ transform_line() {
     str_before "$stripped" " %= "; variable="$R"
     case $variable in
       *[!a-zA-Z0-9_]*|"")
-        printf "$line\n"
+        printf '%s\n' "$line"
         ;;
       *)
         str_after "$stripped" " %= "; value="$R"
-        printf "${indent}${variable}=\$((${variable} % ${value}))\n"
+        printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
       ;;
     esac
   
@@ -907,7 +907,7 @@ transform() {
   done
   
   if is "$single_line_if_active == 1"; then
-    printf "${single_line_if_indent}fi\n"
+    printf '%s\n' "${single_line_if_indent}fi"
   fi
 }
 
@@ -988,12 +988,12 @@ emit_runtime_stripped() {
     0)
       if str_starts "$_ers_line" "# __RUNTIME_START__"; then
         _ers_emit=1
-        printf "$_ers_line\n"
+        printf '%s\n' "$_ers_line"
       fi
       ;;
     1)
       if str_starts "$_ers_line" "# __RUNTIME_END__"; then
-        printf "$_ers_line\n"
+        printf '%s\n' "$_ers_line"
         _ers_emit=2
       else
         case "$_ers_line" in
@@ -1003,7 +1003,7 @@ emit_runtime_stripped() {
           case "$_rt_needed" in
           *" $_ers_fn "*)
             _ers_skip=0
-            printf "$_ers_line\n"
+            printf '%s\n' "$_ers_line"
             ;;
           *)
             _ers_skip=1
@@ -1012,18 +1012,18 @@ emit_runtime_stripped() {
           ;;
         "}")
           if is "$_ers_skip == 0"; then
-            printf "$_ers_line\n"
+            printf '%s\n' "$_ers_line"
           fi
           _ers_skip=0
           ;;
         "")
           if is "$_ers_skip == 0"; then
-            printf "\n"
+            printf '%s\n' ""
           fi
           ;;
         *)
           if is "$_ers_skip == 0"; then
-            printf "$_ers_line\n"
+            printf '%s\n' "$_ers_line"
           fi
           ;;
         esac
@@ -1034,12 +1034,14 @@ emit_runtime_stripped() {
 }
 
 _rt_need_fn() {
+  # Already needed?
   case "$_rt_needed" in
   *" $1 "*)
     return
     ;;
   esac
   _rt_needed="$_rt_needed $1 "
+  # Recursively add dependencies
   eval "_rnf_deps=\"\$_rt_deps_$1\""
   for _rnf_dep in $_rnf_deps; do
     _rt_need_fn "$_rnf_dep"
@@ -1053,11 +1055,11 @@ emit_runtime() {
     0)
       if str_starts "$_er_line" "# __RUNTIME_START__"; then
         _er_emit=1
-        printf "$_er_line\n"
+        printf '%s\n' "$_er_line"
       fi
       ;;
     1)
-      printf "$_er_line\n"
+      printf '%s\n' "$_er_line"
       if str_starts "$_er_line" "# __RUNTIME_END__"; then
         _er_emit=2
       fi
@@ -1067,23 +1069,25 @@ emit_runtime() {
 }
 
 info() {
-    printf "shsh v$VERSION\n\n"
-    printf "usage: shsh [command] [args...]\n\n"
-    printf "  <script>       run script\n"
-    printf "  -c 'code'      run inline code\n"
-    printf "  -t [script]    transform (file or stdin)\n"
-    printf "  -e [script]    emit standalone (stripped runtime)\n"
-    printf "  -E [script]    emit standalone (full runtime)\n"
-    printf "  -              read from stdin\n"
-    printf "  install        install to system\n"
-    printf "  uninstall      remove from system\n"
-    printf "  update         update from github (sudo)\n"
-    printf "  version        show version\n"
+    printf '%s\n' "shsh v$VERSION"
+    printf '%s\n' ""
+    printf '%s\n' "usage: shsh [command] [args...]"
+    printf '%s\n' ""
+    printf '%s\n' "  <script>       run script"
+    printf '%s\n' "  -c 'code'      run inline code"
+    printf '%s\n' "  -t [script]    transform (file or stdin)"
+    printf '%s\n' "  -e [script]    emit standalone (stripped runtime)"
+    printf '%s\n' "  -E [script]    emit standalone (full runtime)"
+    printf '%s\n' "  -              read from stdin"
+    printf '%s\n' "  install        install to system"
+    printf '%s\n' "  uninstall      remove from system"
+    printf '%s\n' "  update         update from github (sudo)"
+    printf '%s\n' "  version        show version"
 }
 
 case $1 in
   -c)
-           eval "$(printf "$2\n" | transform)"
+           eval "$(printf '%s\n' "$2" | transform)"
     ;;
   -t)
     if is "\"$2\" == \"\""; then
@@ -1096,11 +1100,11 @@ case $1 in
     if is "\"$2\" == \"\""; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
-      printf "$_es_code\n"
+      printf '%s\n' "$_es_code"
     else
       _es_code="$(transform < "$2")"
       emit_runtime_stripped "$_es_code"
-      printf "$_es_code\n"
+      printf '%s\n' "$_es_code"
     fi
     ;;
   -E)
@@ -1112,10 +1116,10 @@ case $1 in
     fi
     ;;
   -v)
-           printf "shsh $VERSION\n"
+           printf '%s\n' "shsh $VERSION"
     ;;
   version)
-      printf "shsh $VERSION\n"
+      printf '%s\n' "shsh $VERSION"
     ;;
   -)
             eval "$(transform)"
@@ -1145,52 +1149,52 @@ case $1 in
       dest="$HOME/.local/bin/shsh"
     fi
 
-    cp "$0" "$dest" && chmod +x "$dest" && printf "installed: $dest\n"
+    cp "$0" "$dest" && chmod +x "$dest" && printf '%s\n' "installed: $dest"
 
     case ":$PATH:" in
       *":$(dirname "$dest"):"*)
         ;;
       *)
         grep -qF '.local/bin' "$shell" 2>/dev/null || {
-          printf '# shsh\n' >> "$shell"
-          printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> "$shell"
-          printf "added PATH to $shell\n"
+          printf '%s\n' '# shsh' >> "$shell"
+          printf '%s\n' 'export PATH="$HOME/.local/bin:$PATH"' >> "$shell"
+          printf '%s\n' "added PATH to $shell"
         }
-        printf "run: exec \$SHELL\n"
+        printf '%s\n' "run: exec \$SHELL"
       ;;
     esac
     ;;
   uninstall)
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
       if [ -f "$loc" ]; then
-        rm "$loc" && printf "removed: $loc\n"
+        rm "$loc" && printf '%s\n' "removed: $loc"
       fi
     done
     ;;
   update)
     _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
     _dest="/usr/local/bin/shsh"
-    printf "downloading shsh from github...\n"
+    printf '%s\n' "downloading shsh from github..."
     if command -v curl >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if curl -fsSL "$_url" -o "$_tmp"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
       else
         rm -f "$_tmp"
-        printf "error: download failed\n" >&2
+        printf '%s\n' "error: download failed" >&2
         exit 1
       fi
     elif command -v wget >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if wget -qO "$_tmp" "$_url"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
       else
         rm -f "$_tmp"
-        printf "error: download failed\n" >&2
+        printf '%s\n' "error: download failed" >&2
         exit 1
       fi
     else
-      printf "error: curl or wget required\n" >&2
+      printf '%s\n' "error: curl or wget required" >&2
       exit 1
     fi
     ;;
