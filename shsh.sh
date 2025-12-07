@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.25.0"
+VERSION="0.26.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -637,7 +637,7 @@ transform_line() {
         
         if is "$is_single_line == 1"; then
           printf '%s\n' "${indent}${maybe_pattern})"
-          printf '%s\n' "${indent}  ${maybe_statement}"
+          transform_line "${indent}  ${maybe_statement}"
         else
           printf '%s\n' "${indent}${rest})"
         fi
@@ -647,23 +647,36 @@ transform_line() {
     else
       printf '%s\n' "$line"
     fi
+
+    ;;
+  *" = "*)
+    str_before "$stripped" " = "; _tl_var="$R"
+    str_after "$stripped" " = "; _tl_call="$R"
+    case $_tl_var in
+      *[!a-zA-Z0-9_]*|""|[0-9]*)
+        emit_with_try_check "$line"
+        ;;
+      *)
+        printf '%s\n' "${indent}${_tl_call}; ${_tl_var}=\"\$R\""
+      ;;
+    esac
   
     ;;
   "default:"*)
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf "${indent}  ;;\n"
+        printf '%s\n' "${indent}  ;;"
       fi
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
-      printf "${indent}*)\n"
+      printf '%s\n' "${indent}*)"
       if is "\"$statement\" != \"\""; then
-        printf '%s\n' "${indent}  ${statement}"
+        transform_line "${indent}  ${statement}"
       fi
     else
-      printf '%s\n' "$line"
+      emit_with_try_check "$line"
     fi
   
     ;;
@@ -844,9 +857,7 @@ emit_runtime_stripped() {
       _ers_cur_body=""
       ;;
     "}")
-      # Store the function body for dependency analysis
-      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
-      _ers_cur_fn=""
+      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\"" _ers_cur_fn=""
       ;;
     *)
       if is "\"$_ers_cur_fn\" != \"\""; then
@@ -873,11 +884,10 @@ emit_runtime_stripped() {
   done
   
   # Phase 3: Check which functions the source uses
-  _rt_needed=" is " # is() always needed for shsh conditionals
+  _rt_needed=" is "
   for _ers_fn in $_ers_all_fns; do
     case "$_ers_source" in
     *"$_ers_fn"*)
-      # Mark as needed and resolve dependencies recursively
       _rt_need_fn "$_ers_fn"
       ;;
     esac
