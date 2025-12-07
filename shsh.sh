@@ -1,107 +1,34 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.24.0"
+VERSION="0.25.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
 _shsh_dq=$(printf "\042")
 
-_shsh_check_name() {
-  case "$1" in
-    "" | *[!a-zA-Z0-9_]*)
-      printf "shsh error: invalid name/key \"%s\"\n" "$1" >&2
-      return 1
-      ;;
-  esac
-}
+_shsh_sane() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
 
-_shsh_check_int() {
-  case "$1" in
-    "" | *[!0-9]*)
-      printf "shsh error: invalid integer \"%s\"\n" "$1" >&2
-      return 1
-      ;;
-  esac
-}
+_shsh_check_name() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
+_shsh_check_int() { case "$1" in ""|*[!0-9]*) return 1;; esac; }
+str_starts() { case "$1" in "$2"*);; *) return 1;; esac; }
+str_ends() { case "$1" in *"$2");; *) return 1;; esac; }
+str_contains() { case "$1" in *"$2"*);; *) return 1;; esac; }
+str_after() { R="${1#*"$2"}"; [ "$R" != "$1" ]; }
+str_before() { R="${1%%"$2"*}"; [ "$R" != "$1" ]; }
+str_after_last() { R="${1##*"$2"}"; [ "$R" != "$1" ]; }
+str_before_last() { R="${1%"$2"*}"; [ "$R" != "$1" ]; }
+str_ltrim() { R="${1#"${1%%[![:space:]]*}"}"; }
+str_rtrim() { R="${1%"${1##*[![:space:]]}"}"; }
+str_trim() { R="${1#"${1%%[![:space:]]*}"}"; R="${R%"${R##*[![:space:]]}"}"; }
+str_indent() { R="${1%%[![:space:]]*}"; }
 
-str_starts() {
-  case "$1" in "$2"*) return 0 ;; *) return 1 ;; esac
-}
+default() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1}\" ] && $1=\"\$2\""; }
+default_unset() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1+x}\" ] && $1=\"\$2\""; }
 
-str_ends() {
-  case "$1" in *"$2") return 0 ;; *) return 1 ;; esac
-}
-
-str_after() {
-  R="${1#*"$2"}"
-  [ "$R" != "$1" ]
-}
-
-str_before() {
-  R="${1%%"$2"*}"
-  [ "$R" != "$1" ]
-}
-
-str_after_last() {
-  R="${1##*"$2"}"
-  [ "$R" != "$1" ]
-}
-
-str_before_last() {
-  R="${1%"$2"*}"
-  [ "$R" != "$1" ]
-}
-
-str_ltrim() {
-  R="${1#"${1%%[![:space:]]*}"}"
-}
-
-str_rtrim() {
-  R="${1%"${1##*[![:space:]]}"}"
-}
-
-str_trim() {
-  str_ltrim "$1"
-  str_rtrim "$R"
-}
-
-str_indent() {
-  _si_tmp="${1#"${1%%[![:space:]]*}"}"
-  R="${1%"$_si_tmp"}"
-}
-
-str_contains() {
-  case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac
-}
-
-default() {
-  _shsh_check_name "$1" || return 1
-  eval "[ -z \"\${$1}\" ] && $1=\"\$2\""
-}
-
-default_unset() {
-  _shsh_check_name "$1" || return 1
-  eval "[ -z \"\${$1+x}\" ] && $1=\"\$2\""
-}
-
-array_set() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_int "$2" || return 1
-  eval "__shsh_${1}_$2=\"\$3\""
-  eval "[ $2 -ge \${__shsh_${1}_n:-0} ]" && eval "__shsh_${1}_n=$(($2 + 1))"
-}
-
-array_get() {
-  case "$1" in "" | *[!a-zA-Z0-9_]*) return 1 ;; esac
-  case "$2" in "" | *[!0-9]*) return 1 ;; esac
-  eval "R=\"\${__shsh_${1}_$2}\"; [ -n \"\${__shsh_${1}_$2+x}\" ]"
-}
-
-array_len() {
-  _shsh_check_name "$1" || return 1
-  eval "R=\"\${__shsh_${1}_n:-0}\""
-}
+array_set() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; _shsh_check_int "$2" || return 1; eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1))"; }
+array_get() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!0-9]*) return 1;; esac; eval "R=\"\${__shsh_${1}_$2}\"; [ -n \"\${__shsh_${1}_$2+x}\" ]"; }
+array_len() { _shsh_check_name "$1" || return 1; eval "R=\"\${__shsh_${1}_n:-0}\""; }
 
 array_add() {
   _shsh_check_name "$1" || return 1
@@ -110,7 +37,7 @@ array_add() {
 }
 
 array_for() {
-  _shsh_check_name "$1" || return 1
+  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac;
   _af_d=${_af_d:--1}; _af_d=$((_af_d + 1))
   eval "_af_len_$_af_d=\"\${__shsh_${1}_n:-0}\"; _af_i_$_af_d=0"
   while eval "[ \$_af_i_$_af_d -lt \$_af_len_$_af_d ]"; do
@@ -122,7 +49,9 @@ array_for() {
   _af_d=$((_af_d - 1))
 }
 
-array_clear() {
+# leaks, but fast and lazy
+array_clear() { _shsh_check_name "$1" || return 1; eval "__shsh_${1}_n=0"; }
+array_clear_full() {
   _shsh_check_name "$1" || return 1
   eval "_ac_len=\"\${__shsh_${1}_n:-0}\""
   _ac_i=0
@@ -133,15 +62,10 @@ array_clear() {
   eval "__shsh_${1}_n=0"
 }
 
-array_unset() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_int "$2" || return 1
-  eval "unset __shsh_${1}_$2"
-}
+array_unset() { _shsh_check_name "$1" || return 1; _shsh_check_int "$2" || return 1; eval "unset __shsh_${1}_$2"; }
 
 array_remove() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_int "$2" || return 1
+  _shsh_sane "$1" "$2" || return 1;
   eval "_ar_len=\"\${__shsh_${1}_n:-0}\""
   [ "$2" -ge "$_ar_len" ] && return 1
   _ar_i=$2
@@ -155,20 +79,15 @@ array_remove() {
 array_delete() { array_remove "$@"; }
 
 map_set() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_name "$2" || return 1
+  _shsh_sane "$1" "$2" || return 1
   eval "__shsh_map_${1}_${2}=\"\$3\"; _mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
   if [ -z "$_mset_exists" ]; then
-    eval "__shsh_map_${1}_${2}__exists=1"
-    eval "_mset_idx=\"\${__shsh_mapkeys_${1}_n:-0}\""
-    eval "__shsh_mapkeys_${1}_$_mset_idx=\"$2\""
-    eval "__shsh_mapkeys_${1}_n=$((_mset_idx + 1))"
+    eval "__shsh_map_${1}_${2}__exists=1; _mset_idx=\${__shsh_mapkeys_${1}_n:-0}"
+    eval "__shsh_mapkeys_${1}_$_mset_idx=\"$2\"; __shsh_mapkeys_${1}_n=$((_mset_idx + 1))"
   fi
 }
-
 map_keys() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_name "$2" || return 1
+  _shsh_sane "$1" "$2" || return 1;
   eval "__shsh_${2}_n=0; _mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
   _mk_i=0
   while [ "$_mk_i" -lt "$_mk_len" ]; do
@@ -211,24 +130,9 @@ map_clear() {
   eval "__shsh_mapkeys_${1}_n=0"
 }
 
-map_get() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_name "$2" || return 1
-  eval "R=\"\${__shsh_map_${1}_${2}}\""
-}
-
-map_has() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_name "$2" || return 1
-  eval "_mh_val=\"\${__shsh_map_${1}_${2}+x}\""
-  [ -n "$_mh_val" ]
-}
-
-map_delete() {
-  _shsh_check_name "$1" || return 1
-  _shsh_check_name "$2" || return 1
-  eval "unset __shsh_map_${1}_${2}"
-}
+map_get() { _shsh_sane "$1" "$2" || return 1; eval "R=\"\${__shsh_map_${1}_${2}}\""; }
+map_has() { _shsh_sane "$1" "$2" || return 1; eval "[ -n \"\${__shsh_map_${1}_${2}+x}\" ]"; }
+map_delete() { _shsh_sane "$1" "$2" || return 1; eval "unset __shsh_map_${1}_${2}"; }
 
 file_read() {
   R=""
@@ -238,8 +142,10 @@ file_read() {
   done < "$1"
 }
 
-file_write() { printf "%s\n" "$2" > "$1"; }
-file_append() { printf "%s\n" "$2" >> "$1"; }
+file_write() { printf "$2\n" > "$1"; }
+file_append() { printf "$2\n" >> "$1"; }
+file_exists() { [ -f "$1" ]; }
+dir_exists() { [ -d "$1" ]; }
 
 file_lines() {
   _shsh_check_name "$2" || return 1
@@ -256,9 +162,6 @@ file_each() {
     _fe_i=$((_fe_i + 1))
   done < "$1"
 }
-
-file_exists() { [ -f "$1" ]; }
-dir_exists() { [ -d "$1" ]; }
 
 tokenize() {
   _tk_in_dq=0 _tk_in_sq=0 _tk_escape=0
@@ -635,16 +538,16 @@ transform_line() {
   "else:"*)
     str_after "$stripped" "else:"; statement="$R"
     str_ltrim "$statement"; statement="$R"
-    printf '%s\n' "${indent}else"
+    printf "${indent}else\n"
     emit_with_try_check "${indent}  ${statement}"
     if is "$single_line_if_active == 1"; then
-      printf '%s\n' "${indent}fi"
+      printf "${indent}fi\n"
       single_line_if_active=0
     fi
   
     ;;
   "else")
-    printf '%s\n' "${indent}else"
+    printf "${indent}else\n"
   
     ;;
   "while "*)
@@ -654,10 +557,10 @@ transform_line() {
       str_after "$expression" "$COLON_SPACE"; statement="$R"
       emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
       emit_with_try_check "${indent}  ${statement}"
-      printf '%s\n' "${indent}done"
+      printf "${indent}done\n"
       if in_try_block; then
         current_try_depth
-        printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
+        printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
       fi
     elif str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
@@ -670,29 +573,28 @@ transform_line() {
     if str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
     else
-      printf '%s\n' "${indent}${stripped}; do"
+      printf "${indent}${stripped}; do\n"
     fi
   
     ;;
   "done")
-    printf '%s\n' "${indent}done"
+    printf "${indent}done\n"
     if in_try_block; then
       current_try_depth
-      printf '%s\n' "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break"
+      printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
     fi
   
     ;;
   "try")
     try_depth_inc
-    printf '%s\n' "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do"
+    printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
     push t
   
     ;;
   "catch")
     peek
     if is "\"$R\" == \"t\""; then
-      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
-      printf '%s\n' "${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth"
+      printf "${indent}_shsh_brk_$try_depth=1; done\n${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
       pop
       push c
     else
@@ -702,7 +604,7 @@ transform_line() {
     ;;
   "switch "*)
     str_after "$stripped" "switch "; expression="$R"
-    printf '%s\n' "${indent}case $expression in"
+    printf "${indent}case $expression in\n"
     push s
     switch_push_first
   
@@ -713,7 +615,7 @@ transform_line() {
       str_after "$stripped" "case "; rest="$R"
       
       if ! switch_is_first; then
-        printf '%s\n' "${indent}  ;;"
+        printf "${indent}  ;;\n"
       fi
       switch_set_not_first
       
@@ -751,12 +653,12 @@ transform_line() {
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf '%s\n' "${indent}  ;;"
+        printf "${indent}  ;;\n"
       fi
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
-      printf '%s\n' "${indent}*)"
+      printf "${indent}*)\n"
       if is "\"$statement\" != \"\""; then
         printf '%s\n' "${indent}  ${statement}"
       fi
@@ -769,10 +671,10 @@ transform_line() {
     peek
     if is "\"$R\" == \"s\""; then
       if ! switch_is_first; then
-        printf '%s\n' "${indent}  ;;"
+        printf "${indent}  ;;\n"
       fi
       switch_set_not_first
-      printf '%s\n' "${indent}*)"
+      printf "${indent}*)\n"
     else
       printf '%s\n' "$line"
     fi
@@ -781,19 +683,19 @@ transform_line() {
   "end")
     peek
     if is "\"$R\" == \"s\""; then
-      printf '%s\n' "${indent}  ;;"
-      printf '%s\n' "${indent}esac"
+      printf "${indent}  ;;\n"
+      printf "${indent}esac\n"
       switch_pop_first
       pop
     elif is "\"$R\" == \"i\""; then
-      printf '%s\n' "${indent}fi"
+      printf "${indent}fi\n"
       pop
     elif is "\"$R\" == \"c\""; then
-      printf '%s\n' "${indent}fi"
+      printf "${indent}fi\n"
       try_depth_dec
       pop
     elif is "\"$R\" == \"t\""; then
-      printf '%s\n' "${indent}_shsh_brk_$try_depth=1; done"
+      printf "${indent}_shsh_brk_$try_depth=1; done\n"
       try_depth_dec
       pop
     fi
@@ -907,7 +809,7 @@ transform() {
   done
   
   if is "$single_line_if_active == 1"; then
-    printf '%s\n' "${single_line_if_indent}fi"
+    printf "${single_line_if_indent}fi\n"
   fi
 }
 
@@ -988,12 +890,12 @@ emit_runtime_stripped() {
     0)
       if str_starts "$_ers_line" "# __RUNTIME_START__"; then
         _ers_emit=1
-        printf '%s\n' "$_ers_line"
+        printf "$_ers_line\n"
       fi
       ;;
     1)
       if str_starts "$_ers_line" "# __RUNTIME_END__"; then
-        printf '%s\n' "$_ers_line"
+        printf "$_ers_line\n"
         _ers_emit=2
       else
         case "$_ers_line" in
@@ -1003,7 +905,7 @@ emit_runtime_stripped() {
           case "$_rt_needed" in
           *" $_ers_fn "*)
             _ers_skip=0
-            printf '%s\n' "$_ers_line"
+            printf "$_ers_line\n"
             ;;
           *)
             _ers_skip=1
@@ -1012,13 +914,13 @@ emit_runtime_stripped() {
           ;;
         "}")
           if is "$_ers_skip == 0"; then
-            printf '%s\n' "$_ers_line"
+            printf "$_ers_line\n"
           fi
           _ers_skip=0
           ;;
         "")
           if is "$_ers_skip == 0"; then
-            printf '%s\n' ""
+            printf "\n"
           fi
           ;;
         *)
@@ -1034,14 +936,12 @@ emit_runtime_stripped() {
 }
 
 _rt_need_fn() {
-  # Already needed?
   case "$_rt_needed" in
   *" $1 "*)
     return
     ;;
   esac
   _rt_needed="$_rt_needed $1 "
-  # Recursively add dependencies
   eval "_rnf_deps=\"\$_rt_deps_$1\""
   for _rnf_dep in $_rnf_deps; do
     _rt_need_fn "$_rnf_dep"
@@ -1055,7 +955,7 @@ emit_runtime() {
     0)
       if str_starts "$_er_line" "# __RUNTIME_START__"; then
         _er_emit=1
-        printf '%s\n' "$_er_line"
+        printf "$_er_line\n"
       fi
       ;;
     1)
@@ -1069,25 +969,23 @@ emit_runtime() {
 }
 
 info() {
-    printf '%s\n' "shsh v$VERSION"
-    printf '%s\n' ""
-    printf '%s\n' "usage: shsh [command] [args...]"
-    printf '%s\n' ""
-    printf '%s\n' "  <script>       run script"
-    printf '%s\n' "  -c 'code'      run inline code"
-    printf '%s\n' "  -t [script]    transform (file or stdin)"
-    printf '%s\n' "  -e [script]    emit standalone (stripped runtime)"
-    printf '%s\n' "  -E [script]    emit standalone (full runtime)"
-    printf '%s\n' "  -              read from stdin"
-    printf '%s\n' "  install        install to system"
-    printf '%s\n' "  uninstall      remove from system"
-    printf '%s\n' "  update         update from github (sudo)"
-    printf '%s\n' "  version        show version"
+    printf "shsh v$VERSION\n\n"
+    printf "usage: shsh [command] [args...]\n\n"
+    printf "  <script>       run script\n"
+    printf "  -c 'code'      run inline code\n"
+    printf "  -t [script]    transform (file or stdin)\n"
+    printf "  -e [script]    emit standalone (stripped runtime)\n"
+    printf "  -E [script]    emit standalone (full runtime)\n"
+    printf "  -              read from stdin\n"
+    printf "  install        install to system\n"
+    printf "  uninstall      remove from system\n"
+    printf "  update         update from github (sudo)\n"
+    printf "  version        show version\n"
 }
 
 case $1 in
   -c)
-           eval "$(printf '%s\n' "$2" | transform)"
+           eval "$(printf "$2\n" | transform)"
     ;;
   -t)
     if is "\"$2\" == \"\""; then
@@ -1100,11 +998,11 @@ case $1 in
     if is "\"$2\" == \"\""; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
-      printf '%s\n' "$_es_code"
+      printf "$_es_code\n"
     else
       _es_code="$(transform < "$2")"
       emit_runtime_stripped "$_es_code"
-      printf '%s\n' "$_es_code"
+      printf "$_es_code\n"
     fi
     ;;
   -E)
@@ -1116,10 +1014,10 @@ case $1 in
     fi
     ;;
   -v)
-           printf '%s\n' "shsh $VERSION"
+           printf "shsh $VERSION\n"
     ;;
   version)
-      printf '%s\n' "shsh $VERSION"
+      printf "shsh $VERSION\n"
     ;;
   -)
             eval "$(transform)"
@@ -1149,53 +1047,60 @@ case $1 in
       dest="$HOME/.local/bin/shsh"
     fi
 
-    cp "$0" "$dest" && chmod +x "$dest" && printf '%s\n' "installed: $dest"
+    cp "$0" "$dest" && chmod +x "$dest" && printf "installed: $dest\n"
 
     case ":$PATH:" in
       *":$(dirname "$dest"):"*)
         ;;
       *)
         grep -qF '.local/bin' "$shell" 2>/dev/null || {
-          printf '%s\n' '# shsh' >> "$shell"
-          printf '%s\n' 'export PATH="$HOME/.local/bin:$PATH"' >> "$shell"
-          printf '%s\n' "added PATH to $shell"
+          printf '# shsh\n' >> "$shell"
+          printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> "$shell"
+          printf "added PATH to $shell\n"
         }
-        printf '%s\n' "run: exec \$SHELL"
+        printf "run: exec \$SHELL\n"
       ;;
     esac
     ;;
   uninstall)
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
       if [ -f "$loc" ]; then
-        rm "$loc" && printf '%s\n' "removed: $loc"
+        rm "$loc" && printf "removed: $loc\n"
       fi
     done
     ;;
   update)
     _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
     _dest="/usr/local/bin/shsh"
-    printf '%s\n' "downloading shsh from github..."
+    _old_ver="$VERSION"
+    printf "downloading shsh from github...\n"
     if command -v curl >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if curl -fsSL "$_url" -o "$_tmp"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
       else
         rm -f "$_tmp"
-        printf '%s\n' "error: download failed" >&2
+        printf "error: download failed\n" >&2
         exit 1
       fi
     elif command -v wget >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if wget -qO "$_tmp" "$_url"; then
-        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf '%s\n' "updated: $_dest"
+        sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
       else
         rm -f "$_tmp"
-        printf '%s\n' "error: download failed" >&2
+        printf "error: download failed\n" >&2
         exit 1
       fi
     else
-      printf '%s\n' "error: curl or wget required" >&2
+      printf "error: curl or wget required\n" >&2
       exit 1
+    fi
+    _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
+    if is "\"$_new_ver\" == \"$_old_ver\""; then
+      printf "warning: version unchanged (%s) - update may have failed\n" "$_old_ver" >&2
+    else
+      printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
     fi
     ;;
   "")

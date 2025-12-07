@@ -680,11 +680,11 @@ else
   fail "map key injection"
 end
 
-err_add=$(array_add "bad-name" "val" 2>&1)
-if "$err_add" != ""
-  pass "array_add reports errors"
+array_add "bad-name" "val" 2>/dev/null
+if $? != 0
+  pass "array_add rejects invalid name"
 else
-  fail "array_add silent fail"
+  fail "array_add accepts invalid name"
 end
 
 # command substitution in value (should be stored literally)
