@@ -1,7 +1,7 @@
 #
 #       shsh - shell in shell
 #       Shell without the hieroglyphics
-VERSION="0.29.0"
+VERSION="0.30.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -26,7 +26,11 @@ str_indent() { R="${1%%[![:space:]]*}"; }
 default() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1}\" ] && $1=\"\$2\""; }
 default_unset() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1+x}\" ] && $1=\"\$2\""; }
 
-array_set() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; _shsh_check_int "$2" || return 1; eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1))"; }
+array_set() {
+  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac
+  case "$2" in ""|*[!0-9]*) return 1;; esac
+  eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1))"
+}
 array_get() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!0-9]*) return 1;; esac; eval "R=\"\${__shsh_${1}_$2}\"; [ -n \"\${__shsh_${1}_$2+x}\" ]"; }
 array_len() { _shsh_check_name "$1" || return 1; eval "R=\"\${__shsh_${1}_n:-0}\""; }
 
@@ -37,9 +41,26 @@ array_add() {
 }
 
 array_for() {
-  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac;
+  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac
   _af_d=${_af_d:--1}; _af_d=$((_af_d + 1))
   eval "_af_len_$_af_d=\"\${__shsh_${1}_n:-0}\"; _af_i_$_af_d=0"
+
+  while eval "[ \$(( \$_af_i_$_af_d + 4 )) -le \$_af_len_$_af_d ]"; do
+    eval "_idx=\$_af_i_$_af_d"
+    eval "R0=\"\${__shsh_${1}_$((_idx))}\"; \
+          R1=\"\${__shsh_${1}_$((_idx+1))}\"; \
+          R2=\"\${__shsh_${1}_$((_idx+2))}\"; \
+          R3=\"\${__shsh_${1}_$((_idx+3))}\""
+    
+    R="$R0"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R1"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R2"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R3"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+
+    eval "_af_i_$_af_d=\$((\$_af_i_$_af_d + 4))"
+  done
+
+  # Cleanup
   while eval "[ \$_af_i_$_af_d -lt \$_af_len_$_af_d ]"; do
     eval "_af_idx=\$_af_i_$_af_d"
     eval "R=\"\${__shsh_${1}_$_af_idx}\""
@@ -55,6 +76,16 @@ array_clear_full() {
   _shsh_check_name "$1" || return 1
   eval "_ac_len=\"\${__shsh_${1}_n:-0}\""
   _ac_i=0
+  
+  while [ $((_ac_i + 4)) -le "$_ac_len" ]; do
+    eval "unset __shsh_${1}_$((_ac_i)) \
+                 __shsh_${1}_$((_ac_i+1)) \
+                 __shsh_${1}_$((_ac_i+2)) \
+                 __shsh_${1}_$((_ac_i+3))"
+    _ac_i=$((_ac_i + 4))
+  done
+
+  # Cleanup Loop (Stride 1)
   while [ "$_ac_i" -lt "$_ac_len" ]; do
     eval "unset __shsh_${1}_$_ac_i"
     _ac_i=$((_ac_i + 1))
@@ -69,10 +100,24 @@ array_remove() {
   eval "_ar_len=\"\${__shsh_${1}_n:-0}\""
   [ "$2" -ge "$_ar_len" ] && return 1
   _ar_i=$2
+
+  while [ $((_ar_i + 4)) -lt "$_ar_len" ]; do
+    eval "_idx=$_ar_i"
+    
+    eval "__shsh_${1}_$((_idx))=\"\${__shsh_${1}_$((_idx+1))}\"; \
+          __shsh_${1}_$((_idx+1))=\"\${__shsh_${1}_$((_idx+2))}\"; \
+          __shsh_${1}_$((_idx+2))=\"\${__shsh_${1}_$((_idx+3))}\"; \
+          __shsh_${1}_$((_idx+3))=\"\${__shsh_${1}_$((_idx+4))}\""
+
+    _ar_i=$((_ar_i + 4))
+  done
+
+  # Cleanup Loop (Stride 1)
   while [ "$((_ar_i + 1))" -lt "$_ar_len" ]; do
     eval "__shsh_${1}_$_ar_i=\"\${__shsh_${1}_$((_ar_i + 1))}\""
     _ar_i=$((_ar_i + 1))
   done
+
   eval "unset __shsh_${1}_$((_ar_len - 1)); __shsh_${1}_n=$((_ar_len - 1))"
 }
 
@@ -86,22 +131,78 @@ map_set() {
     eval "__shsh_mapkeys_${1}_$_mset_idx=\"$2\"; __shsh_mapkeys_${1}_n=$((_mset_idx + 1))"
   fi
 }
+
 map_keys() {
-  _shsh_sane "$1" "$2" || return 1;
-  eval "__shsh_${2}_n=0; _mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  _shsh_sane "$1" "$2" || return 1
+  
+  eval "_mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
   _mk_i=0
-  while [ "$_mk_i" -lt "$_mk_len" ]; do
+  
+  eval "_out_idx=\"\${__shsh_${2}_n:-0}\""
+
+  while eval "[ \$(( \$_mk_i + 4 )) -le \$_mk_len ]"; do
+    eval "_idx=\$_mk_i"
+
+    eval "K0=\"\${__shsh_mapkeys_${1}_$((_idx))}\"; \
+          K1=\"\${__shsh_mapkeys_${1}_$((_idx+1))}\"; \
+          K2=\"\${__shsh_mapkeys_${1}_$((_idx+2))}\"; \
+          K3=\"\${__shsh_mapkeys_${1}_$((_idx+3))}\""
+
+    eval "X0=\"\${__shsh_map_${1}_${K0}+x}\"; \
+          X1=\"\${__shsh_map_${1}_${K1}+x}\"; \
+          X2=\"\${__shsh_map_${1}_${K2}+x}\"; \
+          X3=\"\${__shsh_map_${1}_${K3}+x}\""
+
+    [ -n "$X0" ] && { eval "__shsh_${2}_$_out_idx=\"\$K0\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X1" ] && { eval "__shsh_${2}_$_out_idx=\"\$K1\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X2" ] && { eval "__shsh_${2}_$_out_idx=\"\$K2\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X3" ] && { eval "__shsh_${2}_$_out_idx=\"\$K3\""; _out_idx=$((_out_idx + 1)); }
+
+    eval "_mk_i=\$((\$_mk_i + 4))"
+  done
+
+  # Cleanup Loop (Stride 1)
+  while eval "[ \$_mk_i -lt \$_mk_len ]"; do
     eval "_mk_key=\"\${__shsh_mapkeys_${1}_$_mk_i}\""
     eval "_mk_exists=\"\${__shsh_map_${1}_${_mk_key}+x}\""
-    [ -n "$_mk_exists" ] && array_add "$2" "$_mk_key"
+    if [ -n "$_mk_exists" ]; then
+      # Inline append
+      eval "__shsh_${2}_$_out_idx=\"\$_mk_key\""
+      _out_idx=$((_out_idx + 1))
+    fi
     _mk_i=$((_mk_i + 1))
   done
+  
+  eval "__shsh_${2}_n=$_out_idx"
 }
 
 map_for() {
   _shsh_check_name "$1" || return 1
   _mf_d=${_mf_d:--1}; _mf_d=$((_mf_d + 1))
   eval "_mf_len_$_mf_d=\"\${__shsh_mapkeys_${1}_n:-0}\"; _mf_i_$_mf_d=0"
+
+  while eval "[ \$(( \$_mf_i_$_mf_d + 4 )) -le \$_mf_len_$_mf_d ]"; do
+    eval "_idx=\$_mf_i_$_mf_d"
+    
+    eval "K0=\"\${__shsh_mapkeys_${1}_$((_idx))}\"; \
+          K1=\"\${__shsh_mapkeys_${1}_$((_idx+1))}\"; \
+          K2=\"\${__shsh_mapkeys_${1}_$((_idx+2))}\"; \
+          K3=\"\${__shsh_mapkeys_${1}_$((_idx+3))}\""
+
+    eval "V0=\"\${__shsh_map_${1}_${K0}}\"; X0=\"\${__shsh_map_${1}_${K0}+x}\"; \
+          V1=\"\${__shsh_map_${1}_${K1}}\"; X1=\"\${__shsh_map_${1}_${K1}+x}\"; \
+          V2=\"\${__shsh_map_${1}_${K2}}\"; X2=\"\${__shsh_map_${1}_${K2}+x}\"; \
+          V3=\"\${__shsh_map_${1}_${K3}}\"; X3=\"\${__shsh_map_${1}_${K3}+x}\""
+
+    if [ -n "$X0" ]; then R="$V0"; K="$K0"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X1" ]; then R="$V1"; K="$K1"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X2" ]; then R="$V2"; K="$K2"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X3" ]; then R="$V3"; K="$K3"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+
+    eval "_mf_i_$_mf_d=\$((\$_mf_i_$_mf_d + 4))"
+  done
+
+  # Cleanup
   while eval "[ \$_mf_i_$_mf_d -lt \$_mf_len_$_mf_d ]"; do
     eval "_mf_idx=\$_mf_i_$_mf_d"
     eval "_mf_key=\"\${__shsh_mapkeys_${1}_$_mf_idx}\""
