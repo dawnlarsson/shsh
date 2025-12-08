@@ -3,7 +3,7 @@
 # Compares: bash (with bashisms) vs dash vs zsh
 #
 
-default ITERATIONS 500
+default ITERATIONS 5000
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SHSH_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -201,10 +201,10 @@ done"
 }
 
 ########################################
-# BENCHMARK: Comparisons (is function)
+# BENCHMARK: Comparisons (native [ ] tests)
 ########################################
 bench_comparisons() {
-  section "Comparisons (is function)"
+  section "Comparisons (native [ ] tests)"
   
   subsection "Numeric comparisons (${ITERATIONS} iterations)"
   
@@ -212,10 +212,10 @@ bench_comparisons() {
     _code="
 $RUNTIME
 i=0; while [ \$i -lt $ITERATIONS ]; do
-  is \"\$i < 1000\"
-  is \"\$i >= 0\"
-  is \"\$i == \$i\"
-  is \"\$i != 999\"
+  [ \$i -lt 1000 ]
+  [ \$i -ge 0 ]
+  [ \$i -eq \$i ]
+  [ \$i -ne 999 ]
   i=\$((i + 1))
 done"
     _time=$(run_bench "$shell" "$_code")
@@ -229,9 +229,9 @@ done"
     _code="
 $RUNTIME
 i=0; while [ \$i -lt $ITERATIONS ]; do
-  is \"hello == hello\"
-  is \"hello != world\"
-  is \"abc == abc\"
+  [ \"hello\" = \"hello\" ]
+  [ \"hello\" != \"world\" ]
+  [ \"abc\" = \"abc\" ]
   i=\$((i + 1))
 done"
     _time=$(run_bench "$shell" "$_code")
@@ -245,9 +245,9 @@ done"
     _code="
 $RUNTIME
 i=0; while [ \$i -lt $ITERATIONS ]; do
-  is 'nonempty'
-  is ''
-  is 'value'
+  [ -n 'nonempty' ]
+  [ -n '' ]
+  [ -n 'value' ]
   i=\$((i + 1))
 done"
     _time=$(run_bench "$shell" "$_code")
@@ -1081,9 +1081,9 @@ print_summary() {
   
   # Comparisons
   printf "${CYAN}Comparisons${RESET}\n"
-  print_summary_row "is (numeric)" "time_is_num"
-  print_summary_row "is (string)" "time_is_str"
-  print_summary_row "is (truthiness)" "time_is_truth"
+  print_summary_row "cmp (numeric)" "time_is_num"
+  print_summary_row "cmp (string)" "time_is_str"
+  print_summary_row "cmp (truthiness)" "time_is_truth"
   
   # Defaults
   printf "${CYAN}Defaults${RESET}\n"

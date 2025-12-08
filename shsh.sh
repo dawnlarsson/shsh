@@ -1,7 +1,4 @@
-#
-#       shsh - shell in shell
-#       Shell without the hieroglyphics
-VERSION="0.30.0"
+VERSION="0.31.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -70,7 +67,6 @@ array_for() {
   _af_d=$((_af_d - 1))
 }
 
-# leaks, but fast and lazy
 array_clear() { _shsh_check_name "$1" || return 1; eval "__shsh_${1}_n=0"; }
 array_clear_full() {
   _shsh_check_name "$1" || return 1
@@ -271,8 +267,35 @@ tokenize() {
   _tk_input="$1" _tk_out="$2" _tk_char="" _tk_token=""
   _shsh_check_name "$_tk_out" || return 1
   eval "__shsh_${_tk_out}_n=0"
-  
+
   while [ -n "$_tk_input" ]; do
+    if [ "$_tk_escape" -eq 0 ]; then
+      _tk_chunk=""
+      if [ "$_tk_in_sq" -eq 1 ]; then
+        _tk_chunk="${_tk_input%%\'*}"
+      elif [ "$_tk_in_dq" -eq 1 ]; then
+        _tk_chunk="${_tk_input%%[\"\\]*}"
+      else
+        _tk_chunk="${_tk_input%%[ \(\)\"\'\\]*}"
+      fi
+
+      if [ -n "$_tk_chunk" ]; then
+         if [ "$_tk_chunk" != "$_tk_input" ]; then
+           _tk_token="$_tk_token$_tk_chunk"
+           _tk_input="${_tk_input#$_tk_chunk}"
+           continue
+         elif [ "$_tk_in_sq" -eq 1 ] || [ "$_tk_in_dq" -eq 1 ]; then
+            _tk_token="$_tk_token$_tk_chunk"
+            _tk_input=""
+            continue
+         else
+             _tk_token="$_tk_token$_tk_chunk"
+             _tk_input=""
+             continue
+         fi
+      fi
+    fi
+
     _tk_char="${_tk_input%"${_tk_input#?}"}"
     _tk_input="${_tk_input#?}"
     
@@ -307,11 +330,20 @@ tokenize() {
 
     case "$_tk_char" in
       "(" | ")")
-        [ -n "$_tk_token" ] && { array_add "$_tk_out" "$_tk_token"; _tk_token=""; }
-        array_add "$_tk_out" "$_tk_char"
+        [ -n "$_tk_token" ] && {
+            eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+            eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_token\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
+            _tk_token=""; 
+        }
+        eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+        eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_char\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
         ;;
-      " " | "")
-        [ -n "$_tk_token" ] && { array_add "$_tk_out" "$_tk_token"; _tk_token=""; }
+      " " | "	")
+        [ -n "$_tk_token" ] && { 
+            eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+            eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_token\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
+            _tk_token=""; 
+        }
         ;;
       *)
         _tk_token="$_tk_token$_tk_char"
@@ -319,68 +351,6 @@ tokenize() {
     esac
   done
   [ -n "$_tk_token" ] && array_add "$_tk_out" "$_tk_token"
-}
-
-is() {
-  case "$1" in
-    *"$_shsh_dq"*|*"$_shsh_sq"*)
-      _is_in="$1" _is_dq=0 _is_sq=0 _is_esc=0 _is_p=0
-      _is_op="" _is_op_at=-1 _is_op_len=0
-      while [ -n "$_is_in" ]; do
-        _is_c="${_is_in%"${_is_in#?}"}"
-        _is_in="${_is_in#?}"
-        if [ "$_is_esc" -eq 1 ]; then _is_esc=0; _is_p=$((_is_p+1)); continue; fi
-        [ "$_is_c" = "\\" ] && [ "$_is_sq" -eq 0 ] && { _is_esc=1; _is_p=$((_is_p+1)); continue; }
-        [ "$_is_c" = "$_shsh_dq" ] && [ "$_is_sq" -eq 0 ] && { [ "$_is_dq" -eq 1 ] && _is_dq=0 || _is_dq=1; _is_p=$((_is_p+1)); continue; }
-        [ "$_is_c" = "$_shsh_sq" ] && [ "$_is_dq" -eq 0 ] && { [ "$_is_sq" -eq 1 ] && _is_sq=0 || _is_sq=1; _is_p=$((_is_p+1)); continue; }
-        if [ "$_is_dq" -eq 0 ] && [ "$_is_sq" -eq 0 ] && [ "$_is_c" = " " ]; then
-          _is_ahead="$_is_c$_is_in"
-          case "$_is_ahead" in
-            " == "*) _is_op="==" _is_op_at=$_is_p _is_op_len=2; break;;
-            " != "*) _is_op="!=" _is_op_at=$_is_p _is_op_len=2; break;;
-            " <= "*) _is_op="<=" _is_op_at=$_is_p _is_op_len=2; break;;
-            " >= "*) _is_op=">=" _is_op_at=$_is_p _is_op_len=2; break;;
-            " < "*)  _is_op="<"  _is_op_at=$_is_p _is_op_len=1; break;;
-            " > "*)  _is_op=">"  _is_op_at=$_is_p _is_op_len=1; break;;
-          esac
-        fi
-        _is_p=$((_is_p+1))
-      done
-      [ "$_is_op_at" -lt 0 ] && { [ -n "$1" ]; return $?; }
-      _is_left="" _is_right="" _is_i=0 _is_tmp="$1"
-      while [ "$_is_i" -lt "$_is_op_at" ]; do
-        _is_left="$_is_left${_is_tmp%"${_is_tmp#?}"}"
-        _is_tmp="${_is_tmp#?}"; _is_i=$((_is_i+1))
-      done
-      _is_i=0; _is_skip=$((_is_op_len + 2))
-      while [ "$_is_i" -lt "$_is_skip" ]; do _is_tmp="${_is_tmp#?}"; _is_i=$((_is_i+1)); done
-      _is_right="$_is_tmp"
-      case "$_is_left" in "$_shsh_dq"*"$_shsh_dq") _is_left="${_is_left#?}"; _is_left="${_is_left%?}";; esac
-      case "$_is_right" in "$_shsh_dq"*"$_shsh_dq") _is_right="${_is_right#?}"; _is_right="${_is_right%?}";; esac
-      case "$_is_left" in "$_shsh_sq"*"$_shsh_sq") _is_left="${_is_left#?}"; _is_left="${_is_left%?}";; esac
-      case "$_is_right" in "$_shsh_sq"*"$_shsh_sq") _is_right="${_is_right#?}"; _is_right="${_is_right%?}";; esac
-      case "$_is_op" in
-        "==") [ "$_is_left" = "$_is_right" ];;
-        "!=") [ "$_is_left" != "$_is_right" ];;
-        "<=") [ "$_is_left" -le "$_is_right" ] 2>/dev/null;;
-        "<")  [ "$_is_left" -lt "$_is_right" ] 2>/dev/null;;
-        ">=") [ "$_is_left" -ge "$_is_right" ] 2>/dev/null;;
-        ">")  [ "$_is_left" -gt "$_is_right" ] 2>/dev/null;;
-      esac
-      ;;
-    *)
-      case "$1" in *"*"*|*"?"*|*"["*) set -f; set -- $1; set +f;; *) set -- $1;; esac
-      case "$2" in
-        "<=") [ "$1" -le "$3" ] 2>/dev/null;;
-        "<")  [ "$1" -lt "$3" ] 2>/dev/null;;
-        ">=") [ "$1" -ge "$3" ] 2>/dev/null;;
-        ">")  [ "$1" -gt "$3" ] 2>/dev/null;;
-        "==") [ "$1" = "$3" ];;
-        "!=") [ "$1" != "$3" ];;
-        *)    [ -n "$1" ];;
-      esac
-      ;;
-  esac
 }
 
 ENDIAN=${ENDIAN:-0}
@@ -425,16 +395,40 @@ bit_16() {
 
 bit_32() {
   _b32_buf=""
+  while [ $# -ge 4 ]; do
+    _v0=$((${1%,})); _v1=$((${2%,})); _v2=$((${3%,})); _v3=$((${4%,}))
+    
+    _b1=$(( (_v0 >> 24) & 0xff )); _b2=$(( (_v0 >> 16) & 0xff ))
+    _b3=$(( (_v0 >> 8) & 0xff )); _b4=$(( _v0 & 0xff ))
+    _o0="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+
+    _b1=$(( (_v1 >> 24) & 0xff )); _b2=$(( (_v1 >> 16) & 0xff ))
+    _b3=$(( (_v1 >> 8) & 0xff )); _b4=$(( _v1 & 0xff ))
+    _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+
+    _b1=$(( (_v2 >> 24) & 0xff )); _b2=$(( (_v2 >> 16) & 0xff ))
+    _b3=$(( (_v2 >> 8) & 0xff )); _b4=$(( _v2 & 0xff ))
+    _o2="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+
+    _b1=$(( (_v3 >> 24) & 0xff )); _b2=$(( (_v3 >> 16) & 0xff ))
+    _b3=$(( (_v3 >> 8) & 0xff )); _b4=$(( _v3 & 0xff ))
+    _o3="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o0$_o1$_o2$_o3" ;;
+      *)
+         _b32_buf="$_b32_buf$_o0$_o1$_o2$_o3" 
+         ;;
+    esac
+    shift 4
+  done
+  
   for _b32_arg in "$@"; do
     _b32_v=$((${_b32_arg%,}))
-    _b1=$(( (_b32_v >> 24) & 0xff ))
-    _b2=$(( (_b32_v >> 16) & 0xff ))
-    _b3=$(( (_b32_v >> 8) & 0xff ))
-    _b4=$(( _b32_v & 0xff ))
-    _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
-    _o2="\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))"
-    _o3="\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))"
-    _o4="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _b1=$(( (_b32_v >> 24) & 0xff )); _b2=$(( (_b32_v >> 16) & 0xff ))
+    _b3=$(( (_b32_v >> 8) & 0xff )); _b4=$(( _b32_v & 0xff ))
+    _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"; _o2="\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))"
+    _o3="\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))"; _o4="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
     case "$ENDIAN" in
       big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o1$_o2$_o3$_o4" ;;
       *)                   _b32_buf="$_b32_buf$_o4$_o3$_o2$_o1" ;;
@@ -671,18 +665,97 @@ escape_quotes() {
   R="$_eq_out$_eq_in"
 }
 
+parse_comparison() {
+  _pc_cond="$1"
+  _ec_op="" _ec_shell_op="" _ec_left="" _ec_right=""
+  
+  case $_pc_cond in
+  *" == "*)
+    str_before "$_pc_cond" " == "; _ec_left="$R"
+    str_after "$_pc_cond" " == "; _ec_right="$R"
+    _ec_op="==" _ec_shell_op="="
+    ;;
+  *" != "*)
+    str_before "$_pc_cond" " != "; _ec_left="$R"
+    str_after "$_pc_cond" " != "; _ec_right="$R"
+    _ec_op="!=" _ec_shell_op="!="
+    ;;
+  *" <= "*)
+    str_before "$_pc_cond" " <= "; _ec_left="$R"
+    str_after "$_pc_cond" " <= "; _ec_right="$R"
+    _ec_op="<=" _ec_shell_op="-le"
+    ;;
+  *" >= "*)
+    str_before "$_pc_cond" " >= "; _ec_left="$R"
+    str_after "$_pc_cond" " >= "; _ec_right="$R"
+    _ec_op=">=" _ec_shell_op="-ge"
+    ;;
+  *" < "*)
+    str_before "$_pc_cond" " < "; _ec_left="$R"
+    str_after "$_pc_cond" " < "; _ec_right="$R"
+    _ec_op="<" _ec_shell_op="-lt"
+    ;;
+  *" > "*)
+    str_before "$_pc_cond" " > "; _ec_left="$R"
+    str_after "$_pc_cond" " > "; _ec_right="$R"
+    _ec_op=">" _ec_shell_op="-gt"
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+strip_outer_quotes() {
+  _soq_val="$1"
+  case $_soq_val in
+  '"'*'"')
+    _soq_val="${_soq_val#\"}"
+    R="${_soq_val%\"}"
+    ;;
+  "'"*"'")
+    _soq_val="${_soq_val#\'}"
+    R="${_soq_val%\'}"
+    ;;
+  *)
+    R="$_soq_val"
+    ;;
+  esac
+}
+
+format_test_operand() {
+  _fto_val="$1"
+  case $_fto_val in
+  '"'*'"')
+    R="$_fto_val"
+    ;;
+  "'"*"'")
+    R="$_fto_val"
+    ;;
+  '$'*)
+    R="\"$_fto_val\""
+    ;;
+  *)
+    R="\"$_fto_val\""
+    ;;
+  esac
+}
+
 emit_condition() {
   keyword="$1" condition="$2" indent="$3" suffix="$4"
+  
   if is_comparison "$condition"; then
-    escape_quotes "$condition"
-    printf '%s\n' "${indent}${keyword} is \"$R\"${suffix}"
+    parse_comparison "$condition"
+    format_test_operand "$_ec_left"; _emit_left="$R"
+    format_test_operand "$_ec_right"; _emit_right="$R"
+    printf '%s\n' "${indent}${keyword} [ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]${suffix}"
   else
     printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
   fi
 }
 
 nonempty() {
-  if is "\"$1\" == \"\""; then
+  if [ "$1" = "" ]; then
     return 1
   else
     return 0
@@ -692,7 +765,7 @@ nonempty() {
 emit_inline_statement() {
   inline_indent="$1"
   inline_statement="$2"
-  if is "\"$inline_statement\" == \"\""; then
+  if [ "$inline_statement" = "" ]; then
     return
   fi
 
@@ -735,9 +808,9 @@ transform_line() {
   str_ltrim "$line"; stripped="$R"
   str_indent "$line"; indent="$R"
   
-  if is "$single_line_if_active == 1"; then
+  if [ "$single_line_if_active" = "1" ]; then
     continues_single_line=0
-    if is "\"$indent\" == \"$single_line_if_indent\""; then
+    if [ "$indent" = "$single_line_if_indent" ]; then
       if str_starts "$stripped" "elif "; then
         continues_single_line=1
       fi
@@ -746,18 +819,18 @@ transform_line() {
       fi
     fi
     
-    if is "$continues_single_line == 1"; then
+    if [ "$continues_single_line" = "1" ]; then
       converts_to_multiline=0
       if str_starts "$stripped" "elif "; then
         if ! str_contains "$stripped" "$COLON_SPACE"; then
           converts_to_multiline=1
         fi
       fi
-      if is "\"$stripped\" == \"else\""; then
+      if [ "$stripped" = "else" ]; then
         converts_to_multiline=1
       fi
       
-      if is "$converts_to_multiline == 1"; then
+      if [ "$converts_to_multiline" = "1" ]; then
         single_line_if_active=0
         push i
       fi
@@ -806,7 +879,7 @@ transform_line() {
     str_ltrim "$statement"; statement="$R"
     printf "${indent}else\n"
     emit_with_try_check "${indent}  ${statement}"
-    if is "$single_line_if_active == 1"; then
+    if [ "$single_line_if_active" = "1" ]; then
       printf "${indent}fi\n"
       single_line_if_active=0
     fi
@@ -859,7 +932,7 @@ transform_line() {
     ;;
   "catch")
     peek
-    if is "\"$R\" == \"t\""; then
+    if [ "$R" = "t" ]; then
       printf "${indent}_shsh_brk_$try_depth=1; done\n${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
       pop
       push c
@@ -877,7 +950,7 @@ transform_line() {
     ;;
   "case "*)
     peek
-    if is "\"$R\" == \"s\""; then
+    if [ "$R" = "s" ]; then
       str_after "$stripped" "case "; rest="$R"
       
       if ! switch_is_first; then
@@ -892,16 +965,16 @@ transform_line() {
         
         is_single_line=0
         if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
-          if is "\"$maybe_statement\" != \"\""; then
+          if [ "$maybe_statement" != "" ]; then
             is_single_line=1
           fi
         else
-          if is "\"$maybe_statement\" != \"\""; then
+          if [ "$maybe_statement" != "" ]; then
             is_single_line=1
           fi
         fi
         
-        if is "$is_single_line == 1"; then
+        if [ "$is_single_line" = "1" ]; then
           printf '%s\n' "${indent}${maybe_pattern})"
           emit_inline_statement "${indent}  " "$maybe_statement"
         else
@@ -925,7 +998,7 @@ transform_line() {
     ;;
   "default:"*)
     peek
-    if is "\"$R\" == \"s\""; then
+    if [ "$R" = "s" ]; then
       if ! switch_is_first; then
         printf "${indent}  ;;\n"
       fi
@@ -933,7 +1006,7 @@ transform_line() {
       str_after "$stripped" "default:"; statement="$R"
       str_ltrim "$statement"; statement="$R"
       printf "${indent}*)\n"
-      if is "\"$statement\" != \"\""; then
+      if [ "$statement" != "" ]; then
         emit_inline_statement "${indent}  " "$statement"
       fi
     else
@@ -943,7 +1016,7 @@ transform_line() {
     ;;
   "default")
     peek
-    if is "\"$R\" == \"s\""; then
+    if [ "$R" = "s" ]; then
       if ! switch_is_first; then
         printf "${indent}  ;;\n"
       fi
@@ -956,19 +1029,19 @@ transform_line() {
     ;;
   "end")
     peek
-    if is "\"$R\" == \"s\""; then
+    if [ "$R" = "s" ]; then
       printf "${indent}  ;;\n"
       printf "${indent}esac\n"
       switch_pop_first
       pop
-    elif is "\"$R\" == \"i\""; then
+    elif [ "$R" = "i" ]; then
       printf "${indent}fi\n"
       pop
-    elif is "\"$R\" == \"c\""; then
+    elif [ "$R" = "c" ]; then
       printf "${indent}fi\n"
       try_depth_dec
       pop
-    elif is "\"$R\" == \"t\""; then
+    elif [ "$R" = "t" ]; then
       printf "${indent}_shsh_brk_$try_depth=1; done\n"
       try_depth_dec
       pop
@@ -1117,7 +1190,7 @@ transform() {
     transform_line "$current_line"
   done
   
-  if is "$single_line_if_active == 1"; then
+  if [ "$single_line_if_active" = "1" ]; then
     printf "${single_line_if_indent}fi\n"
   fi
 }
@@ -1130,8 +1203,6 @@ run_file() {
 
 emit_runtime_stripped() {
   _ers_source="$1"
-  
-  # Phase 1: Extract all runtime functions and their bodies
   _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
   while IFS= read -r _ers_line || nonempty "$_ers_line"; do
     if str_starts "$_ers_line" "# __RUNTIME_START__"; then
@@ -1140,11 +1211,9 @@ emit_runtime_stripped() {
     if str_starts "$_ers_line" "# __RUNTIME_END__"; then
       break
     fi
-    if is "$_ers_in_rt == 0"; then
+    if [ "$_ers_in_rt" = "0" ]; then
       continue
     fi
-    
-    # Check for function start
     case "$_ers_line" in
     *"() {"*)
       str_before "$_ers_line" "()"; _ers_cur_fn="$R"
@@ -1153,24 +1222,22 @@ emit_runtime_stripped() {
       _ers_cur_body=""
       ;;
     "}")
-      # Store the function body for dependency analysis
-      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
+        eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
       _ers_cur_fn=""
       ;;
     *)
-      if is "\"$_ers_cur_fn\" != \"\""; then
+      if [ "$_ers_cur_fn" != "" ]; then
         _ers_cur_body="$_ers_cur_body $_ers_line"
       fi
       ;;
     esac
   done < "$0"
   
-  # Phase 2: Build dependency map by checking which functions each body calls
   for _ers_fn in $_ers_all_fns; do
     eval "_ers_body=\"\$_rt_body_$_ers_fn\""
     _ers_deps=""
     for _ers_other in $_ers_all_fns; do
-      if is "\"$_ers_fn\" != \"$_ers_other\""; then
+      if [ "$_ers_fn" != "$_ers_other" ]; then
         case "$_ers_body" in
         *"$_ers_other"*)
           _ers_deps="$_ers_deps $_ers_other"
@@ -1181,8 +1248,7 @@ emit_runtime_stripped() {
     eval "_rt_deps_$_ers_fn=\"\$_ers_deps\""
   done
   
-  # Phase 3: Check which functions the source uses
-  _rt_needed=" is " # is() always needed for shsh conditionals
+  _rt_needed=" "
   for _ers_fn in $_ers_all_fns; do
     case "$_ers_source" in
     *"$_ers_fn"*)
@@ -1191,7 +1257,6 @@ emit_runtime_stripped() {
     esac
   done
   
-  # Phase 4: Emit only needed functions
   _ers_emit=0 _ers_skip=0
   while IFS= read -r _ers_line || nonempty "$_ers_line"; do
     case $_ers_emit in
@@ -1221,18 +1286,18 @@ emit_runtime_stripped() {
           esac
           ;;
         "}")
-          if is "$_ers_skip == 0"; then
+          if [ "$_ers_skip" = "0" ]; then
             printf "$_ers_line\n"
           fi
           _ers_skip=0
           ;;
         "")
-          if is "$_ers_skip == 0"; then
+          if [ "$_ers_skip" = "0" ]; then
             printf "\n"
           fi
           ;;
         *)
-          if is "$_ers_skip == 0"; then
+          if [ "$_ers_skip" = "0" ]; then
             printf '%s\n' "$_ers_line"
           fi
           ;;
@@ -1296,16 +1361,16 @@ case $1 in
     eval "$(printf "$2\n" | transform)"
     ;;
   -t)
-    if is "\"$2\" == \"\""; then
+    if [ "$2" = "" ]; then
       transform
-    elif is "\"$2\" == \"-\""; then
+    elif [ "$2" = "-" ]; then
       transform
     else
       transform < "$2"
     fi
     ;;
   -e)
-    if is "\"$2\" == \"\""; then
+    if [ "$2" = "" ]; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
       printf "$_es_code\n"
@@ -1317,7 +1382,7 @@ case $1 in
     ;;
   -E)
     emit_runtime
-    if is "\"$2\" == \"\""; then
+    if [ "$2" = "" ]; then
       transform
     else
       transform < "$2"
@@ -1406,7 +1471,7 @@ case $1 in
     if command -v curl >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if curl -fsSL "$_url" -o "$_tmp"; then
-        if is "$_needs_sudo == 1"; then
+        if [ "$_needs_sudo" = "1" ]; then
           sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
         else
           mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
@@ -1419,7 +1484,7 @@ case $1 in
     elif command -v wget >/dev/null 2>&1; then
       _tmp=$(mktemp)
       if wget -qO "$_tmp" "$_url"; then
-        if is "$_needs_sudo == 1"; then
+        if [ "$_needs_sudo" = "1" ]; then
           sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
         else
           mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
@@ -1434,7 +1499,7 @@ case $1 in
       exit 1
     fi
     _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
-    if is "\"$_new_ver\" == \"$_old_ver\""; then
+    if [ "$_new_ver" = "$_old_ver" ]; then
       printf "warning: version unchanged (%s) - update may have failed\n" "$_old_ver" >&2
     else
       printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"

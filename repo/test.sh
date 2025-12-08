@@ -1,4 +1,5 @@
-PASS=0 FAIL=0
+PASS=0 
+FAIL=0
 
 _test_script="repo/test.sh"
 if file_exists "./shsh.sh"
@@ -753,7 +754,7 @@ ml="line1
 line2"
 ml2="line1
 line2"
-if is "\"$ml\" == \"$ml2\""
+if "$ml" == "$ml2"
   pass "multiline comparison"
 else
   fail "multiline comparison"
@@ -1565,8 +1566,16 @@ check_enum_key() {
   end
 }
 array_for enum_keys check_enum_key
-if $_found_alpha == 1 && $_found_beta == 1 && $_found_gamma == 1
-  pass "map_keys contains all keys"
+if $_found_alpha == 1
+  if $_found_beta == 1
+    if $_found_gamma == 1
+      pass "map_keys contains all keys"
+    else
+      fail "map_keys missing keys (a=$_found_alpha b=$_found_beta g=$_found_gamma)"
+    end
+  else
+    fail "map_keys missing keys (a=$_found_alpha b=$_found_beta g=$_found_gamma)"
+  end
 else
   fail "map_keys missing keys (a=$_found_alpha b=$_found_beta g=$_found_gamma)"
 end
@@ -1589,8 +1598,16 @@ check_del_key() {
   end
 }
 array_for del_enum_keys check_del_key
-if $_has_a == 1 && $_has_b == 0 && $_has_c == 1
-  pass "map_keys excludes deleted"
+if $_has_a == 1
+  if $_has_b == 0
+    if $_has_c == 1
+      pass "map_keys excludes deleted"
+    else
+      fail "map_keys delete handling (a=$_has_a b=$_has_b c=$_has_c)"
+    end
+  else
+    fail "map_keys delete handling (a=$_has_a b=$_has_b c=$_has_c)"
+  end
 else
   fail "map_keys delete handling (a=$_has_a b=$_has_b c=$_has_c)"
 end
