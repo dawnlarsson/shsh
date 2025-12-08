@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.35.0"
+VERSION="0.36.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1545,7 +1545,7 @@ case $1 in
       sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
       case "$_install_dest" in
         "$HOME"/*)
-          sudo chown "$(id -u):$(id -g)" "$_install_dest"
+          sudo chown "$USER" "$_install_dest"
         ;;
       esac
       printf "installed: %s\n" "$_install_dest"
@@ -1680,7 +1680,7 @@ case $1 in
       sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
       case "$_dest" in
         "$HOME"/*)
-          sudo chown "$(id -u):$(id -g)" "$_dest"
+          sudo chown "$USER" "$_dest"
         ;;
       esac
       printf "updated: %s\n" "$_dest"

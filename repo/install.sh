@@ -58,16 +58,14 @@ if [ ! -d "$DEST_DIR" ]; then
   }
 fi
 
-# Install - try direct copy first, fall back to sudo
 if cp "$TMP" "$DEST" 2>/dev/null && chmod +x "$DEST" 2>/dev/null; then
   printf "installed: %s\n" "$DEST"
 else
   printf "installing to %s (requires sudo)...\n" "$DEST"
   sudo cp "$TMP" "$DEST"
   sudo chmod +x "$DEST"
-  # Fix ownership if installing to user's home directory
   case "$DEST" in
-    "$HOME"/*) sudo chown "$(id -u):$(id -g)" "$DEST" ;;
+    "$HOME"/*) sudo chown "$USER" "$DEST" ;;
   esac
   printf "installed: %s\n" "$DEST"
 fi

@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.35.0"
+VERSION="0.36.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1359,7 +1359,7 @@ switch $1
       printf "installing to %s (requires sudo)...\n" "$_install_dest"
       sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
       switch "$_install_dest"
-        case "$HOME"/*: sudo chown "$(id -u):$(id -g)" "$_install_dest"
+        case "$HOME"/*: sudo chown "$USER" "$_install_dest"
       end
       printf "installed: %s\n" "$_install_dest"
     end
@@ -1475,7 +1475,7 @@ switch $1
       printf "installing to %s (requires sudo)...\n" "$_dest"
       sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
       switch "$_dest"
-        case "$HOME"/*: sudo chown "$(id -u):$(id -g)" "$_dest"
+        case "$HOME"/*: sudo chown "$USER" "$_dest"
       end
       printf "updated: %s\n" "$_dest"
     end
