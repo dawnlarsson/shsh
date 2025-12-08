@@ -1,6 +1,6 @@
 #!/bin/sh
-# shsh installer - https://github.com/dawnlarsson/shsh
-# Usage: curl -fsSL https://raw.githubusercontent.com/dawnlarsson/shsh/main/repo/install.sh | sh
+# Usage: curl -fsSL https://sh.dawn.day | sh
+
 set -e
 
 URL="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
@@ -44,22 +44,31 @@ done
 
 # If nothing in PATH is suitable, use ~/.local/bin
 if [ -z "$DEST" ]; then
-  mkdir -p "$HOME/.local/bin"
+  mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
   DEST="$HOME/.local/bin/shsh"
   NEEDS_PATH=1
 fi
 
 DEST_DIR=$(dirname "$DEST")
 
-# Install
-if [ -w "$DEST_DIR" ] 2>/dev/null; then
-  cp "$TMP" "$DEST"
-  chmod +x "$DEST"
+if [ ! -d "$DEST_DIR" ]; then
+  mkdir -p "$DEST_DIR" || {
+    printf "creating %s (requires sudo)...\n" "$DEST_DIR"
+    sudo mkdir -p "$DEST_DIR"
+  }
+fi
+
+# Install - try direct copy first, fall back to sudo
+if cp "$TMP" "$DEST" 2>/dev/null && chmod +x "$DEST" 2>/dev/null; then
   printf "installed: %s\n" "$DEST"
 else
   printf "installing to %s (requires sudo)...\n" "$DEST"
   sudo cp "$TMP" "$DEST"
   sudo chmod +x "$DEST"
+  # Fix ownership if installing to user's home directory
+  case "$DEST" in
+    "$HOME"/*) sudo chown "$(id -u):$(id -g)" "$DEST" ;;
+  esac
   printf "installed: %s\n" "$DEST"
 fi
 

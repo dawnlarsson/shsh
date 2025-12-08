@@ -1527,19 +1527,27 @@ case $1 in
     done
 
     if [ "$_install_dest" = "" ]; then
-      mkdir -p "$HOME/.local/bin"
+      mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
       _install_dest="$HOME/.local/bin/shsh"
       _install_needs_path=1
     fi
 
     _install_dir=$(dirname "$_install_dest")
     
-    if path_writable "$_install_dir"; then
-      cp "$0" "$_install_dest" && chmod +x "$_install_dest"
+    if ! dir_exists "$_install_dir"; then
+      mkdir -p "$_install_dir" 2>/dev/null || sudo mkdir -p "$_install_dir"
+    fi
+    
+    if cp "$0" "$_install_dest" 2>/dev/null && chmod +x "$_install_dest" 2>/dev/null; then
       printf "installed: %s\n" "$_install_dest"
     else
       printf "installing to %s (requires sudo)...\n" "$_install_dest"
       sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
+      case "$_install_dest" in
+        "$HOME"/*)
+          sudo chown "$(id -u):$(id -g)" "$_install_dest"
+        ;;
+      esac
       printf "installed: %s\n" "$_install_dest"
     fi
     
@@ -1640,10 +1648,6 @@ case $1 in
     fi
 
     _dest_dir=$(dirname "$_dest")
-    _needs_sudo=0
-    if ! path_writable "$_dest_dir"; then
-      _needs_sudo=1
-    fi
 
     printf "downloading shsh from github...\n"
     _tmp=$(mktemp)
@@ -1669,13 +1673,18 @@ case $1 in
       exit 1
     fi
     
-    if [ "$_needs_sudo" = "1" ]; then
+    if mv "$_tmp" "$_dest" 2>/dev/null && chmod +x "$_dest" 2>/dev/null; then
+      printf "updated: %s\n" "$_dest"
+    else
       printf "installing to %s (requires sudo)...\n" "$_dest"
       sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
-    else
-      mv "$_tmp" "$_dest" && chmod +x "$_dest"
+      case "$_dest" in
+        "$HOME"/*)
+          sudo chown "$(id -u):$(id -g)" "$_dest"
+        ;;
+      esac
+      printf "updated: %s\n" "$_dest"
     fi
-    printf "updated: %s\n" "$_dest"
     
     _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
     if [ "$_new_ver" = "$_old_ver" ]; then
