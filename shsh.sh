@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.34.0"
+VERSION="0.35.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1509,109 +1509,177 @@ case $1 in
     eval "$(transform)"
     ;;
   install)
-    shell="$HOME/.profile"
-    case $SHELL in
-      */bash)
-        if file_exists "$HOME/.bash_profile"; then
-          shell="$HOME/.bash_profile"
-        else
-          shell="$HOME/.bashrc"
-        fi
+    _install_dest=""
+    _install_needs_path=0
+    
+    for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
+      case ":$PATH:" in
+        *":$_try_dir:"*)
+          if path_writable "$_try_dir"; then
+            _install_dest="$_try_dir/shsh"
+            break
+          elif [ "$_try_dir" = "/usr/local/bin" ]; then
+            _install_dest="$_try_dir/shsh"
+            break
+          fi
         ;;
-      */zsh)
-        shell="$HOME/.zshrc"
-        ;;
-      */fish)
-        shell="$HOME/.config/fish/config.fish"
-      ;;
-    esac
+      esac
+    done
 
-    if path_writable "/usr/local/bin"; then
-      dest=/usr/local/bin/shsh
-    else
+    if [ "$_install_dest" = "" ]; then
       mkdir -p "$HOME/.local/bin"
-      dest="$HOME/.local/bin/shsh"
+      _install_dest="$HOME/.local/bin/shsh"
+      _install_needs_path=1
     fi
 
-    cp "$0" "$dest" && chmod +x "$dest" && printf "installed: $dest\n"
-
-    case ":$PATH:" in
-      *":$(dirname "$dest"):"*)
+    _install_dir=$(dirname "$_install_dest")
+    
+    if path_writable "$_install_dir"; then
+      cp "$0" "$_install_dest" && chmod +x "$_install_dest"
+      printf "installed: %s\n" "$_install_dest"
+    else
+      printf "installing to %s (requires sudo)...\n" "$_install_dest"
+      sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
+      printf "installed: %s\n" "$_install_dest"
+    fi
+    
+    if [ "$_install_needs_path" = "1" ]; then
+      _shell_rc=""
+      _path_export='export PATH="$HOME/.local/bin:$PATH"'
+      
+      case $SHELL in
+        */bash)
+          if file_exists "$HOME/.bash_profile"; then
+            _shell_rc="$HOME/.bash_profile"
+          elif file_exists "$HOME/.bash_login"; then
+            _shell_rc="$HOME/.bash_login"
+          else
+            _shell_rc="$HOME/.bashrc"
+          fi
+          ;;
+        */zsh)
+          _shell_rc="$HOME/.zshrc"
+          ;;
+        */fish)
+          _shell_rc="$HOME/.config/fish/config.fish"
+          _path_export='set -gx PATH $HOME/.local/bin $PATH'
+          ;;
+        *)
+          _shell_rc="$HOME/.profile"
         ;;
-      *)
-        grep -qF '.local/bin' "$shell" 2>/dev/null || {
-          printf '# shsh\n' >> "$shell"
-          printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> "$shell"
-          printf "added PATH to $shell\n"
-        }
-        printf "run: exec \$SHELL\n"
-      ;;
-    esac
+      esac
+      
+      _already_configured=0
+      if file_exists "$_shell_rc"; then
+        if grep -qE '(\.local/bin|HOME/.local/bin)' "$_shell_rc" 2>/dev/null; then
+          _already_configured=1
+        fi
+      fi
+      
+      if [ "$_already_configured" = "0" ]; then
+        printf '\n# shsh - added by installer\n%s\n' "$_path_export" >> "$_shell_rc"
+        printf "added PATH to %s\n" "$_shell_rc"
+        printf "\n\033[1;33mIMPORTANT:\033[0m Run this to use shsh now:\n"
+        printf "  \033[1mexec \$SHELL\033[0m\n"
+        printf "Or open a new terminal.\n"
+      else
+        printf "PATH already configured in %s\n" "$_shell_rc"
+        printf "\n\033[1;33mNOTE:\033[0m If shsh isn't found, run:\n"
+        printf "  \033[1mexec \$SHELL\033[0m\n"
+      fi
+    else
+      printf "\nshsh is ready to use!\n"
+    fi
     ;;
   uninstall)
-    for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh"; do
+    _found=0
+    for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
       if file_exists "$loc"; then
-        rm "$loc" && printf "removed: $loc\n"
+        _found=1
+        if path_writable "$(dirname "$loc")"; then
+          rm "$loc" && printf "removed: %s\n" "$loc"
+        else
+          printf "removing %s (requires sudo)...\n" "$loc"
+          sudo rm "$loc" && printf "removed: %s\n" "$loc"
+        fi
       fi
     done
+    if [ "$_found" = "0" ]; then
+      printf "shsh not found in standard locations\n"
+    fi
     ;;
   update)
     _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
     _old_ver="$VERSION"
     _dest=""
 
-    if file_executable "/usr/local/bin/shsh"; then
-      _dest="/usr/local/bin/shsh"
-    elif file_executable "$HOME/.local/bin/shsh"; then
-      _dest="$HOME/.local/bin/shsh"
-    elif path_writable "/usr/local/bin"; then
-      _dest="/usr/local/bin/shsh"
-    else
-      mkdir -p "$HOME/.local/bin"
-      _dest="$HOME/.local/bin/shsh"
+    for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
+      if file_executable "$_try_loc"; then
+        _dest="$_try_loc"
+        break
+      fi
+    done
+    
+    if [ "$_dest" = "" ]; then
+      for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
+        case ":$PATH:" in
+          *":$_try_dir:"*)
+            if [ "path_writable "$_try_dir" || "$_try_dir"" = "/usr/local/bin" ]; then
+              mkdir -p "$_try_dir" 2>/dev/null || true
+              _dest="$_try_dir/shsh"
+              break
+            fi
+          ;;
+        esac
+      done
+      
+      if [ "$_dest" = "" ]; then
+        mkdir -p "$HOME/.local/bin"
+        _dest="$HOME/.local/bin/shsh"
+      fi
     fi
 
+    _dest_dir=$(dirname "$_dest")
     _needs_sudo=0
-    if str_starts "$_dest" "/usr/local/"; then
-      if ! path_writable "$(dirname "$_dest")"; then
-        _needs_sudo=1
-      fi
+    if ! path_writable "$_dest_dir"; then
+      _needs_sudo=1
     fi
 
     printf "downloading shsh from github...\n"
+    _tmp=$(mktemp)
+    _download_ok=0
+    
     if command -v curl >/dev/null 2>&1; then
-      _tmp=$(mktemp)
       if curl -fsSL "$_url" -o "$_tmp"; then
-        if [ "$_needs_sudo" = "1" ]; then
-          sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
-        else
-          mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
-        fi
-      else
-        rm -f "$_tmp"
-        printf "error: download failed\n" >&2
-        exit 1
+        _download_ok=1
       fi
     elif command -v wget >/dev/null 2>&1; then
-      _tmp=$(mktemp)
       if wget -qO "$_tmp" "$_url"; then
-        if [ "$_needs_sudo" = "1" ]; then
-          sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest" && printf "updated: $_dest\n"
-        else
-          mv "$_tmp" "$_dest" && chmod +x "$_dest" && printf "updated: $_dest\n"
-        fi
-      else
-        rm -f "$_tmp"
-        printf "error: download failed\n" >&2
-        exit 1
+        _download_ok=1
       fi
     else
+      rm -f "$_tmp"
       printf "error: curl or wget required\n" >&2
       exit 1
     fi
+    
+    if [ "$_download_ok" = "0" ]; then
+      rm -f "$_tmp"
+      printf "error: download failed\n" >&2
+      exit 1
+    fi
+    
+    if [ "$_needs_sudo" = "1" ]; then
+      printf "installing to %s (requires sudo)...\n" "$_dest"
+      sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
+    else
+      mv "$_tmp" "$_dest" && chmod +x "$_dest"
+    fi
+    printf "updated: %s\n" "$_dest"
+    
     _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
     if [ "$_new_ver" = "$_old_ver" ]; then
-      printf "warning: version unchanged (%s) - update may have failed\n" "$_old_ver" >&2
+      printf "version: %s (already up to date)\n" "$_old_ver"
     else
       printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
     fi
