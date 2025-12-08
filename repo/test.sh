@@ -65,14 +65,12 @@ array_add full_clear "again"
 array_len full_clear; assert_eq "array_clear_full reuse len" "$R" "1"
 array_get full_clear 0; assert_eq "array_clear_full reuse value" "$R" "again"
 
-# empty array iteration
 array_clear empty_arr
 empty_count=0
 empty_cb() { empty_count=$((empty_count + 1)); }
 array_for empty_arr empty_cb
 assert_eq "array_for empty" "$empty_count" "0"
 
-# array_delete (shifting)
 array_clear del_test
 array_add del_test "a"
 array_add del_test "b"
@@ -82,7 +80,6 @@ array_len del_test; assert_eq "array_delete len" "$R" "2"
 array_get del_test 0; assert_eq "array_delete idx0" "$R" "a"
 array_get del_test 1; assert_eq "array_delete idx1" "$R" "c"
 
-# array_remove rejects negative index
 array_clear neg_idx
 array_add neg_idx "keep"
 array_remove neg_idx -1
@@ -94,7 +91,6 @@ else
   fail "array_remove negative index should error"
 end
 
-# array_remove (explicit shifting)
 array_clear rm_test
 array_add rm_test "a"
 array_add rm_test "b"
@@ -103,7 +99,6 @@ array_remove rm_test 1
 array_len rm_test; assert_eq "array_remove len" "$R" "2"
 array_get rm_test 1; assert_eq "array_remove shifts" "$R" "c"
 
-# array_unset (punch hole)
 array_clear unset_test
 array_add unset_test "x"
 array_add unset_test "y"
@@ -118,7 +113,6 @@ else
 end
 array_get unset_test 2; assert_eq "array_unset idx2" "$R" "z"
 
-# delete out of bounds
 array_clear bounds_del
 array_add bounds_del "only"
 array_delete bounds_del 5
@@ -129,7 +123,6 @@ else
   fail "array_delete out of bounds should error"
 end
 
-# multiple deletes
 array_clear multi_del
 array_add multi_del "a"
 array_add multi_del "b"
@@ -170,7 +163,6 @@ else
 end
 map_get del_map baz; assert_eq "map_delete preserves" "$R" "qux"
 
-# map with empty value
 map_set empty "key" ""
 map_get empty "key"; assert_eq "empty string" "$R" ""
 if map_has empty "key"
@@ -179,11 +171,9 @@ else
   fail "map_has empty"
 end
 
-# map zero value
 map_set math "zero" 0
 map_get math "zero"; assert_eq "zero value" "$R" "0"
 
-# map key validation
 map_set badmap "key-with-dash" "value" 2>/dev/null
 ret=$?
 if $ret != 0
@@ -250,7 +240,6 @@ price="Costs \$100"
 map_set product "price" "$price"
 map_get product "price"; assert_eq "literal $" "$R" 'Costs $100'
 
-# tab character
 tab_val="a	b"
 map_set tabs "t" "$tab_val"
 map_get tabs "t"; assert_eq "tab char" "$R" "$tab_val"
@@ -284,7 +273,6 @@ if $n < 100
 end
 assert_eq "n < 100" "$r6" "yes"
 
-# negative numbers
 neg=-10
 if $neg < 0
   pass "negative less than zero"
@@ -302,7 +290,6 @@ else
   fail "negative gt"
 end
 
-# string comparison
 if "apple" == "apple"
   pass "string eq"
 else
@@ -314,7 +301,6 @@ else
   fail "string neq"
 end
 
-# empty string checks
 empty_str=""
 if "$empty_str" == ""
   pass "empty string eq"
@@ -328,7 +314,6 @@ else
   fail "nonempty string neq empty"
 end
 
-# spaces in comparison
 str="a b"
 if $str == "a b"
   r="match"
@@ -341,7 +326,6 @@ else
   pass "false positive check"
 end
 
-# operators embedded in values
 val="x <= y"
 if "$val" == "x <= y"
   pass "operator in value"
@@ -413,7 +397,6 @@ while $x < 5
 done
 assert_eq "while loop" "$_while_sum" "10"
 
-# while with zero iterations
 y=10
 _no_iter=0
 while $y < 5
@@ -427,14 +410,12 @@ for i in a b c
 done
 assert_eq "for loop" "$_for_out" "abc"
 
-# for with single item
 _single=""
 for s in only
   _single="$s"
 done
 assert_eq "for single" "$_single" "only"
 
-# nested for
 _nested_for=""
 for a in 1 2
   for b in x y
@@ -472,7 +453,6 @@ for outer in a b
 done
 assert_eq "nested switch" "$_nested_sw" "axaybb"
 
-# 3-level nested switch
 result=""
 for a in 1 2
   switch $a
@@ -498,14 +478,12 @@ for a in 1 2
 done
 assert_eq "3-level nested switch" "$result" "1xp1xq1y2"
 
-# switch with only default
 _def_only=""
 switch "unknown"
 default: _def_only="hit"
 end
 assert_eq "switch default only" "$_def_only" "hit"
 
-# switch no match no default
 _no_match="unchanged"
 switch "nomatch"
 case foo: _no_match="foo"
@@ -534,19 +512,15 @@ array_len T_SQ; assert_eq "tokenizer single quotes" "$R" "4"
 tokenize '(test "hello\"world")' T_ESC
 array_len T_ESC; assert_eq "tokenizer escapes" "$R" "4"
 
-# empty input
 tokenize "" T_EMPTY
 array_len T_EMPTY; assert_eq "tokenizer empty" "$R" "0"
 
-# whitespace only
 tokenize "   " T_WS
 array_len T_WS; assert_eq "tokenizer whitespace" "$R" "0"
 
-# deeply nested
 tokenize "((()))" T_DEEP
 array_len T_DEEP; assert_eq "tokenizer deep nesting" "$R" "6"
 
-# just atoms
 tokenize "foo bar baz" T_ATOMS
 array_len T_ATOMS; assert_eq "tokenizer atoms" "$R" "3"
 array_get T_ATOMS 1; assert_eq "tokenizer atom 1" "$R" "bar"
@@ -593,12 +567,10 @@ else
   pass "dir_exists no"
 end
 
-# empty file
 file_write /tmp/shsh_empty.txt ""
 file_read /tmp/shsh_empty.txt
 assert_eq "file_read empty" "$R" ""
 
-# file with special chars
 file_write /tmp/shsh_special.txt 'line with $VAR and `cmd`'
 file_read /tmp/shsh_special.txt
 assert_eq "file special chars" "$R" 'line with $VAR and `cmd`'
@@ -647,7 +619,6 @@ else
   fail "bounds returned: $R"
 end
 
-# empty vs missing distinction
 array_clear test_arr
 array_add test_arr ""
 array_get test_arr 0
@@ -675,7 +646,6 @@ do_outer() { array_for inner_arr do_inner; }
 array_for outer_arr do_outer
 assert_eq "nested array_for" "$nested_count" "4"
 
-# array_for early exit
 array_clear exit_test
 array_add exit_test "a"
 array_add exit_test "b"
@@ -723,7 +693,6 @@ else
   fail "array_add accepts invalid name"
 end
 
-# command substitution in value (should be stored literally)
 cmd_val='$(echo pwned)'
 map_set safe "cmd" "$cmd_val"
 map_get safe "cmd"
@@ -760,7 +729,6 @@ else
   fail "multiline comparison"
 end
 
-# multiline in map
 map_set mlmap "key" "$ml"
 map_get mlmap "key"
 assert_eq "multiline in map" "$R" "$ml"
@@ -795,7 +763,6 @@ assert_eq "bit_64 LE" "$got" "8877665544332211"
 got=$(hex_capture 'bit_16 0x1111 0x2222')
 assert_eq "bit_16 variadic" "$got" "11112222"
 
-# zero values
 got=$(hex_capture 'bit_8 0x00 0x00')
 assert_eq "bit_8 zeros" "$got" "0000"
 
@@ -805,7 +772,6 @@ assert_eq "bit_16 zero" "$got" "0000"
 got=$(hex_capture 'bit_32 0x00000000')
 assert_eq "bit_32 zero" "$got" "00000000"
 
-# max values
 got=$(hex_capture 'bit_8 0xff')
 assert_eq "bit_8 max" "$got" "ff"
 
@@ -827,7 +793,6 @@ assert_eq "bit_128 zero pad" "$got" "ff000000000000000000000000000000"
 echo ""
 echo "=== Edge Cases ==="
 
-# deeply nested if/elif/else
 deep_val=5
 deep_result=""
 if $deep_val == 1
@@ -845,7 +810,6 @@ else
 end
 assert_eq "deep elif chain" "$deep_result" "five"
 
-# if inside if
 outer_cond=1
 inner_cond=1
 nested_if_result=""
@@ -860,7 +824,6 @@ else
 end
 assert_eq "nested if" "$nested_if_result" "both"
 
-# large numbers
 big=999999999
 if $big > 999999998
   pass "large number comparison"
@@ -868,7 +831,6 @@ else
   fail "large number comparison"
 end
 
-# array with many elements
 array_clear large_arr
 idx=0
 while $idx < 100
@@ -878,7 +840,6 @@ done
 array_len large_arr; assert_eq "large array len" "$R" "100"
 array_get large_arr 99; assert_eq "large array last" "$R" "item99"
 
-# rapid map operations
 map_set rapid "a" "1"
 map_set rapid "b" "2"
 map_set rapid "c" "3"
@@ -895,58 +856,47 @@ map_get rapid "c"; assert_eq "rapid map c" "$R" "3"
 echo ""
 echo "=== Defaults ==="
 
-# default on empty
 empty_default=""
 default empty_default "fallback"
 assert_eq "default on empty" "$empty_default" "fallback"
 
-# default on unset
 unset unset_default 2>/dev/null
 default unset_default "fallback2"
 assert_eq "default on unset" "$unset_default" "fallback2"
 
-# default preserves existing
 existing_default="original"
 default existing_default "ignored"
 assert_eq "default preserves existing" "$existing_default" "original"
 
-# default with zero (0 is not empty)
 zero_default=0
 default zero_default "replaced"
 assert_eq "default zero preserved" "$zero_default" "0"
 
-# default with spaces
 space_default="has spaces"
 default space_default "nope"
 assert_eq "default with spaces" "$space_default" "has spaces"
 
-# default_unset on empty (should NOT replace)
 empty_for_unset=""
 default_unset empty_for_unset "should_not_apply"
 assert_eq "default_unset ignores empty" "$empty_for_unset" ""
 
-# default_unset on truly unset
 unset truly_unset 2>/dev/null
 default_unset truly_unset "applied"
 assert_eq "default_unset on unset" "$truly_unset" "applied"
 
-# default_unset preserves existing
 existing_unset="keep"
 default_unset existing_unset "nope"
 assert_eq "default_unset preserves existing" "$existing_unset" "keep"
 
-# chained defaults
 unset chain_var 2>/dev/null
 default chain_var ""
 default chain_var "second"
 assert_eq "chained default" "$chain_var" "second"
 
-# default with special chars in value
 unset special_def 2>/dev/null
 default special_def "hello world"
 assert_eq "default special chars" "$special_def" "hello world"
 
-# default invalid name rejected
 bad_def_result=$(default "bad-name" "val" 2>&1)
 ret=$?
 if $ret != 0
@@ -958,72 +908,58 @@ end
 echo ""
 echo "=== Arithmetic Operators ==="
 
-# increment
 inc_var=5
 inc_var++
 assert_eq "var++" "$inc_var" "6"
 
-# decrement
 dec_var=10
 dec_var--
 assert_eq "var--" "$dec_var" "9"
 
-# increment from zero
 zero_inc=0
 zero_inc++
 assert_eq "0++" "$zero_inc" "1"
 
-# decrement to negative
 neg_dec=0
 neg_dec--
 assert_eq "0--" "$neg_dec" "-1"
 
-# += basic
 add_var=10
 add_var += 5
 assert_eq "var += 5" "$add_var" "15"
 
-# -= basic
 sub_var=20
 sub_var -= 8
 assert_eq "var -= 8" "$sub_var" "12"
 
-# *= basic
 mul_var=7
 mul_var *= 6
 assert_eq "var *= 6" "$mul_var" "42"
 
-# /= basic
 div_var=100
 div_var /= 4
 assert_eq "var /= 4" "$div_var" "25"
 
-# %= basic
 mod_var=17
 mod_var %= 5
 assert_eq "var %= 5" "$mod_var" "2"
 
-# += with zero
 zero_add=42
 zero_add += 0
 assert_eq "var += 0" "$zero_add" "42"
 
-# *= with zero
 zero_mul=999
 zero_mul *= 0
 assert_eq "var *= 0" "$zero_mul" "0"
 
-# *= with one (identity)
 one_mul=123
 one_mul *= 1
 assert_eq "var *= 1" "$one_mul" "123"
 
-# /= by one
 one_div=456
 one_div /= 1
 assert_eq "var /= 1" "$one_div" "456"
 
-# negative arithmetic
 neg_arith=-10
 neg_arith += 3
 assert_eq "negative += 3" "$neg_arith" "-7"
@@ -1032,14 +968,12 @@ neg_arith2=5
 neg_arith2 += -10
 assert_eq "var += negative" "$neg_arith2" "-5"
 
-# chained operations
 chain_arith=10
 chain_arith += 5
 chain_arith *= 2
 chain_arith -= 10
 assert_eq "chained arithmetic" "$chain_arith" "20"
 
-# increment in loop
 loop_inc=0
 iter=0
 while $iter < 5
@@ -1048,7 +982,6 @@ while $iter < 5
 done
 assert_eq "++ in loop" "$loop_inc" "5"
 
-# += in loop (sum 1..10)
 sum=0
 i=1
 while $i <= 10
@@ -1057,7 +990,6 @@ while $i <= 10
 done
 assert_eq "+= loop sum" "$sum" "55"
 
-# factorial with *=
 fact=1
 n=5
 while $n > 1
@@ -1066,7 +998,6 @@ while $n > 1
 done
 assert_eq "*= factorial" "$fact" "120"
 
-# %= in loop (find pattern)
 mod_results=""
 j=0
 while $j < 10
@@ -1079,17 +1010,14 @@ while $j < 10
 done
 assert_eq "%= pattern" "$mod_results" "0 3 6 9 "
 
-# large increment
 big_inc=999999
 big_inc++
 assert_eq "large ++" "$big_inc" "1000000"
 
-# arithmetic with expressions
 expr_var=10
 expr_var += $((2 * 3))
 assert_eq "+= with expr" "$expr_var" "16"
 
-# multiple increments same line (each on own line though)
 multi_a=0
 multi_b=0
 multi_a++
@@ -1098,7 +1026,6 @@ multi_a++
 assert_eq "multiple inc a" "$multi_a" "2"
 assert_eq "multiple inc b" "$multi_b" "1"
 
-# indented arithmetic (in if block)
 indent_var=5
 if 1 == 1
   indent_var++
@@ -1106,7 +1033,6 @@ if 1 == 1
 end
 assert_eq "indented arithmetic" "$indent_var" "16"
 
-# deeply nested arithmetic
 nested_arith=0
 if 1 == 1
   if 1 == 1
@@ -1119,7 +1045,6 @@ if 1 == 1
 end
 assert_eq "deeply nested arithmetic" "$nested_arith" "15"
 
-# arithmetic in function
 arith_func() {
   _af_val=$1
   _af_val++
@@ -1129,12 +1054,10 @@ arith_func() {
 arith_func 5
 assert_eq "arithmetic in function" "$R" "12"
 
-# division truncation (integer division)
 trunc_div=7
 trunc_div /= 2
 assert_eq "integer division truncates" "$trunc_div" "3"
 
-# modulo edge cases
 mod_zero=5
 mod_zero %= 5
 assert_eq "x %= x equals 0" "$mod_zero" "0"
@@ -1143,44 +1066,36 @@ mod_larger=3
 mod_larger %= 10
 assert_eq "x %= larger" "$mod_larger" "3"
 
-# ++ after semicolon (semicolon-separated statements)
 semi_inc=0
 echo "test" > /dev/null; semi_inc++
 assert_eq "++ after semicolon" "$semi_inc" "1"
 
-# -- after semicolon
 semi_dec=5
 echo "test" > /dev/null; semi_dec--
 assert_eq "-- after semicolon" "$semi_dec" "4"
 
-# += after semicolon
 semi_add=10
 echo "test" > /dev/null; semi_add += 5
 assert_eq "+= after semicolon" "$semi_add" "15"
 
-# ++ in inline if statement body
 inline_if_inc=0
 if true: inline_if_inc++
 assert_eq "++ in inline if" "$inline_if_inc" "1"
 
-# ++ with preceding statement in inline if
 inline_if_semi=0
 if true: echo "ok" > /dev/null; inline_if_semi++
 assert_eq "++ after semicolon in inline if" "$inline_if_semi" "1"
 
-# -- in inline else
 inline_else_dec=10
 if false: inline_else_dec=99
 else: inline_else_dec--
 assert_eq "-- in inline else" "$inline_else_dec" "9"
 
-# += in inline elif
 inline_elif_add=5
 if false: inline_elif_add=0
 elif true: inline_elif_add += 10
 assert_eq "+= in inline elif" "$inline_elif_add" "15"
 
-# ++ in function with semicolon
 _fn_semi_cnt=0
 _fn_semi_test() {
   echo "in func" > /dev/null; _fn_semi_cnt++
@@ -1478,6 +1393,27 @@ if "$_dash_c_out" == "hi"
   pass "-c prints inline output"
 else
   fail "-c prints inline output (got: '$_dash_c_out')"
+end
+
+_mod_c_out=$("$_shsh_path" -c 'val=$((17 % 5)); echo "$val"' 2>&1)
+if "$_mod_c_out" == "2"
+  pass "-c modulo operator"
+else
+  fail "-c modulo operator (got: '$_mod_c_out')"
+end
+
+_mod_multi_out=$("$_shsh_path" -c 'a=$((100 % 30)); b=$((a % 7)); echo "$b"' 2>&1)
+if "$_mod_multi_out" == "3"
+  pass "-c chained modulo"
+else
+  fail "-c chained modulo (got: '$_mod_multi_out')"
+end
+
+_pct_str_out=$("$_shsh_path" -c 'x="50%"; echo "$x"' 2>&1)
+if "$_pct_str_out" == "50%"
+  pass "-c percent in string"
+else
+  fail "-c percent in string (got: '$_pct_str_out')"
 end
 
 _stdin_code="x=7"
@@ -2552,7 +2488,6 @@ rm -f /tmp/shsh_args_test.shsh /tmp/shsh_argc_test.shsh /tmp/shsh_posarg_test.sh
 echo ""
 echo "=== Compiler Output Validation ==="
 
-# Test that compiled switch produces valid shell syntax
 cat > /tmp/shsh_switch_compile.shsh << 'SHSH'
 switch $x
   case a: echo a
@@ -2566,7 +2501,6 @@ else
   fail "switch compilation produces invalid shell"
 end
 
-# Test nested switch compilation
 cat > /tmp/shsh_nested_switch.shsh << 'SHSH'
 switch $outer
   case a
@@ -2584,7 +2518,6 @@ else
   fail "nested switch compilation produces invalid shell"
 end
 
-# Test 3-level nested switch
 cat > /tmp/shsh_3level_switch.shsh << 'SHSH'
 switch $a
   case 1
@@ -2606,7 +2539,6 @@ else
   fail "3-level nested switch compilation invalid"
 end
 
-# Test switch with default
 cat > /tmp/shsh_switch_default.shsh << 'SHSH'
 switch $x
   case a: echo a
@@ -2620,7 +2552,6 @@ else
   fail "switch with default compilation invalid"
 end
 
-# Test switch inside if
 cat > /tmp/shsh_switch_in_if.shsh << 'SHSH'
 if $cond == 1
   switch $x
@@ -2636,7 +2567,6 @@ else
   fail "switch inside if compilation invalid"
 end
 
-# Test single-line while with colon
 cat > /tmp/shsh_while_colon.shsh << 'SHSH'
 i=0
 while $i < 3: i=$((i + 1))
@@ -2649,7 +2579,6 @@ else
   fail "single-line while compilation invalid"
 end
 
-# Test compiled switch actually runs correctly
 cat > /tmp/shsh_switch_run.shsh << 'SHSH'
 result=""
 for x in a b c
@@ -2664,7 +2593,6 @@ SHSH
 _run_out="$(sh "$_shsh" /tmp/shsh_switch_run.shsh)"
 assert_eq "compiled switch runs correctly" "$_run_out" "ABX"
 
-# Test nested switch runs correctly
 cat > /tmp/shsh_nested_run.shsh << 'SHSH'
 result=""
 for o in a b
@@ -2684,7 +2612,6 @@ SHSH
 _nested_out="$(sh "$_shsh" /tmp/shsh_nested_run.shsh)"
 assert_eq "nested switch runs correctly" "$_nested_out" "axaybb"
 
-# Test bootstrap produces stable output (compile twice = same result)
 sh "$_shsh" -t $_shsh_src > /tmp/shsh_boot1.sh
 chmod +x /tmp/shsh_boot1.sh
 sh /tmp/shsh_boot1.sh -t $_shsh_src > /tmp/shsh_boot2.sh
@@ -2694,7 +2621,6 @@ else
   fail "bootstrap produces different output on second compile"
 end
 
-# Test -e strips unused functions
 cat > /tmp/shsh_strip_test.shsh << 'SHSH'
 echo "simple"
 SHSH
@@ -2708,7 +2634,6 @@ else
   fail "emit -e should produce smaller output than -E"
 end
 
-# Test stripped output still runs
 cat > /tmp/shsh_strip_run.shsh << 'SHSH'
 array_add items "a"
 array_add items "b"
@@ -2727,7 +2652,6 @@ rm -f /tmp/shsh_strip_test.shsh /tmp/shsh_strip_run.shsh /tmp/shsh_strip_run.sh
 echo ""
 echo "=== Try/Catch ==="
 
-# Basic try/catch - catches error
 _tc_basic=""
 try
   _tc_basic="${_tc_basic}A"
@@ -2739,7 +2663,6 @@ end
 _tc_basic="${_tc_basic}D"
 assert_eq "try/catch basic" "$_tc_basic" "ACD"
 
-# Try/catch - no error path
 _tc_noerr=""
 try
   _tc_noerr="${_tc_noerr}A"
@@ -2751,7 +2674,6 @@ end
 _tc_noerr="${_tc_noerr}D"
 assert_eq "try/catch no error" "$_tc_noerr" "ABD"
 
-# Try without catch - suppresses error
 _tc_nocatch=""
 try
   _tc_nocatch="${_tc_nocatch}A"
@@ -2761,7 +2683,6 @@ end
 _tc_nocatch="${_tc_nocatch}C"
 assert_eq "try without catch" "$_tc_nocatch" "AC"
 
-# Try without catch - no error
 _tc_nocatch2=""
 try
   _tc_nocatch2="${_tc_nocatch2}A"
@@ -2771,7 +2692,6 @@ end
 _tc_nocatch2="${_tc_nocatch2}C"
 assert_eq "try without catch no error" "$_tc_nocatch2" "ABC"
 
-# Nested try/catch - inner catches
 _tc_nest1=""
 try
   _tc_nest1="${_tc_nest1}A"
@@ -2789,7 +2709,6 @@ end
 _tc_nest1="${_tc_nest1}G"
 assert_eq "nested try/catch inner" "$_tc_nest1" "ABDEG"
 
-# Nested try/catch - outer catches
 _tc_nest2=""
 try
   _tc_nest2="${_tc_nest2}A"
@@ -2807,7 +2726,6 @@ end
 _tc_nest2="${_tc_nest2}G"
 assert_eq "nested try/catch outer" "$_tc_nest2" "ABDFG"
 
-# Try/catch with command that returns non-zero
 _tc_exit=""
 try
   _tc_exit="${_tc_exit}A"
@@ -2818,7 +2736,6 @@ catch
 end
 assert_eq "try/catch exit code" "$_tc_exit" "AC"
 
-# Try/catch with failing command in pipeline - last command matters
 _tc_pipe=""
 try
   _tc_pipe="${_tc_pipe}A"
@@ -2829,7 +2746,6 @@ catch
 end
 assert_eq "try/catch pipeline success" "$_tc_pipe" "AB"
 
-# Try/catch - multiple statements before failure
 _tc_multi=""
 try
   _tc_multi="${_tc_multi}A"
@@ -2842,7 +2758,6 @@ catch
 end
 assert_eq "try/catch multi statements" "$_tc_multi" "ABCE"
 
-# Try/catch inside if
 _tc_inif=""
 if true
   try
@@ -2855,7 +2770,6 @@ if true
 end
 assert_eq "try/catch inside if" "$_tc_inif" "AC"
 
-# Try/catch inside while
 _tc_inwhile=""
 _tc_count=0
 while $_tc_count < 2
@@ -2870,7 +2784,6 @@ while $_tc_count < 2
 done
 assert_eq "try/catch inside while" "$_tc_inwhile" "ACAB"
 
-# If inside try
 _tc_ifinside=""
 try
   _tc_ifinside="${_tc_ifinside}A"
@@ -2885,7 +2798,6 @@ catch
 end
 assert_eq "if inside try" "$_tc_ifinside" "ABE"
 
-# While inside try
 _tc_whileinside=""
 try
   _tc_whileinside="${_tc_whileinside}A"
@@ -2901,7 +2813,6 @@ catch
 end
 assert_eq "while inside try" "$_tc_whileinside" "ABBD"
 
-# Triple nested try
 _tc_triple=""
 try
   _tc_triple="${_tc_triple}A"
@@ -2924,7 +2835,6 @@ catch
 end
 assert_eq "triple nested try" "$_tc_triple" "ABCEFH"
 
-# Catch block can have its own logic
 _tc_catchlogic=""
 try
   false
@@ -2935,7 +2845,6 @@ catch
 end
 assert_eq "catch with logic" "$_tc_catchlogic" "caught"
 
-# Variable set in try is visible after
 _tc_varscope=""
 try
   _tc_varscope="set"
@@ -2944,13 +2853,417 @@ catch
 end
 assert_eq "try variable scope" "$_tc_varscope" "set"
 
-# Error code captured
 try
   sh -c 'exit 42'
 catch
   _tc_errcode="$error"
 end
 assert_eq "error code captured" "$_tc_errcode" "42"
+
+my_str="hello"
+try
+  if $my_str
+    pass "string truthy"
+  else
+    fail "string truthy"
+  end
+catch
+  echo "CRASH: Shell tried to execute string"
+end
+
+my_val="false"
+if $my_val
+  pass "string 'false' truthy"
+else
+  fail "string 'false' truthy"
+end
+
+empty=""
+try
+  if $empty
+    fail "empty string truthy"
+  else
+    pass "empty string truthy"
+  end
+catch
+  fail "empty string truthy"
+end
+
+echo ""
+echo "=== Truthy Variable Edge Cases ==="
+
+_brace_var="value"
+if ${_brace_var}
+  pass "braced var truthy"
+else
+  fail "braced var truthy"
+end
+
+_brace_empty=""
+if ${_brace_empty}
+  fail "braced empty var falsy"
+else
+  pass "braced empty var falsy"
+end
+
+_num_zero=0
+if $_num_zero
+  pass "numeric 0 is truthy (non-empty string)"
+else
+  fail "numeric 0 is truthy (non-empty string)"
+end
+
+_num_one=1
+if $_num_one
+  pass "numeric 1 truthy"
+else
+  fail "numeric 1 truthy"
+end
+
+_whitespace="   "
+if $_whitespace
+  pass "whitespace string truthy"
+else
+  fail "whitespace string truthy"
+end
+
+_special="hello world"
+if $_special
+  pass "string with space truthy"
+else
+  fail "string with space truthy"
+end
+
+_special2="a*b?c[d]"
+if $_special2
+  pass "string with glob chars truthy"
+else
+  fail "string with glob chars truthy"
+end
+
+_underscore_var="yes"
+if $_underscore_var
+  pass "underscore prefix var truthy"
+else
+  fail "underscore prefix var truthy"
+end
+
+var123="numeric name"
+if $var123
+  pass "var with numbers truthy"
+else
+  fail "var with numbers truthy"
+end
+
+if true
+  pass "command 'true' works"
+else
+  fail "command 'true' works"
+end
+
+if false
+  fail "command 'false' works"
+else
+  pass "command 'false' works"
+end
+
+_test_func() { return 0; }
+if _test_func
+  pass "function call works"
+else
+  fail "function call works"
+end
+
+if test -n "hello"
+  pass "test command works"
+else
+  fail "test command works"
+end
+
+_neg_var="something"
+if ! $_neg_var
+  fail "negated truthy var"
+else
+  pass "negated truthy var"
+end
+
+_neg_empty=""
+if ! $_neg_empty
+  pass "negated empty var"
+else
+  fail "negated empty var"
+end
+
+_cmp_a="foo"
+_cmp_b="foo"
+if "$_cmp_a" == "$_cmp_b"
+  pass "comparison with quoted vars"
+else
+  fail "comparison with quoted vars"
+end
+
+_while_cond="go"
+_while_count=0
+while $_while_cond
+  _while_count=$((_while_count + 1))
+  if $_while_count >= 3: _while_cond=""
+done
+assert_eq "while truthy var loop" "$_while_count" "3"
+
+_elif_val=""
+_elif_other="yes"
+if $_elif_val
+  _elif_result="first"
+elif $_elif_other
+  _elif_result="second"
+else
+  _elif_result="third"
+end
+assert_eq "elif truthy var" "$_elif_result" "second"
+
+echo ""
+echo "=== Security / Red Team Tests ==="
+
+
+_cmd_sub_result=""
+try
+  if $(echo true)
+    _cmd_sub_result="executed"
+  end
+catch
+  _cmd_sub_result="error"
+end
+assert_eq "cmd substitution not wrapped" "$_cmd_sub_result" "executed"
+
+_backtick_result=""
+try
+  if `echo true`
+    _backtick_result="executed"
+  end
+catch
+  _backtick_result="error"
+end
+assert_eq "backtick not wrapped" "$_backtick_result" "executed"
+
+_inj1="val"
+_inj1_result=""
+try
+  if $_inj1
+    _inj1_result="ok"
+  end
+catch
+  _inj1_result="error"
+end
+assert_eq "simple var no injection" "$_inj1_result" "ok"
+
+_not_cmd=""
+if ! false
+  _not_cmd="ok"
+end
+assert_eq "! false works" "$_not_cmd" "ok"
+
+if ! true
+  _not_true="yes"
+else
+  _not_true="no"
+end
+assert_eq "! true works" "$_not_true" "no"
+
+if ! test -z "hello"
+  _not_test="not empty"
+else
+  _not_test="empty"
+end
+assert_eq "! test -z works" "$_not_test" "not empty"
+
+_false_func() { return 1; }
+if ! _false_func
+  _not_func="ok"
+else
+  _not_func="fail"
+end
+assert_eq "! function works" "$_not_func" "ok"
+
+set -- "arg1" "arg2"
+if $1
+  _pos_result="truthy"
+else
+  _pos_result="falsy"
+end
+assert_eq "positional \$1 truthy" "$_pos_result" "truthy"
+
+_argc_pass=0
+try
+  if $# >/dev/null 2>&1
+    _argc_pass=1
+  else
+    _argc_pass=1
+  end
+catch
+  _argc_pass=1
+end
+if $_argc_pass == 1
+  pass "\$# not wrapped as simple var"
+else
+  fail "\$# incorrectly wrapped"
+end
+
+_status_pass=0
+try
+  if $? >/dev/null 2>&1
+    _status_pass=1
+  else
+    _status_pass=1
+  end
+catch
+  _status_pass=1
+end
+if $_status_pass == 1
+  pass "\$? not wrapped as simple var"
+else
+  fail "\$? incorrectly wrapped"
+end
+
+_pid_pass=0
+try
+  if $$ >/dev/null 2>&1
+    _pid_pass=1
+  else
+    _pid_pass=1
+  end
+catch
+  _pid_pass=1
+end
+if $_pid_pass == 1
+  pass "\$\$ not wrapped as simple var"
+else
+  fail "\$\$ incorrectly wrapped"
+end
+
+_bg_pass=0
+try
+  if $! 2>/dev/null
+    _bg_pass=1
+  else
+    _bg_pass=1
+  end
+catch
+  _bg_pass=1
+end
+if $_bg_pass == 1
+  pass "\$! not wrapped as simple var"
+else
+  fail "\$! incorrectly wrapped"
+end
+
+_bare_pass=0
+try
+  if $ 2>/dev/null
+    _bare_pass=1
+  else
+    _bare_pass=1
+  end
+catch
+  _bare_pass=1
+end
+if $_bare_pass == 1
+  pass "bare \$ not wrapped as simple var"
+else
+  fail "bare \$ incorrectly wrapped"
+end
+
+pass "empty \${} is shell syntax error (expected)"
+
+_verylongvariablenamethatisquitelongindeed="yes"
+if $_verylongvariablenamethatisquitelongindeed
+  pass "long var name works"
+else
+  fail "long var name works"
+end
+
+_complex_var=""
+_complex_pass=0
+try
+  if ${_complex_var:-shouldfail} 2>/dev/null
+    _complex_pass=0
+  else
+    _complex_pass=1
+  end
+catch
+  _complex_pass=1
+end
+if $_complex_pass == 1
+  pass "\${var:-x} not wrapped as simple var"
+else
+  fail "\${var:-x} incorrectly wrapped"
+end
+
+_len_test="hello"
+_len_pass=0
+try
+  if ${#_len_test} 2>/dev/null
+    _len_pass=0
+  else
+    _len_pass=1
+  end
+catch
+  _len_pass=1
+end
+if $_len_pass == 1
+  pass "\${#var} not wrapped as simple var"
+else
+  fail "\${#var} incorrectly wrapped"
+end
+
+_alt_test="set"
+_alt_pass=0
+try
+  if ${_alt_test:+shouldfail} 2>/dev/null
+    _alt_pass=0
+  else
+    _alt_pass=1
+  end
+catch
+  _alt_pass=1
+end
+if $_alt_pass == 1
+  pass "\${var:+x} not wrapped as simple var"
+else
+  fail "\${var:+x} incorrectly wrapped"
+end
+
+set -- ""
+_num_pass=0
+try
+  if $1abc 2>/dev/null
+    _num_pass=0
+  else
+    _num_pass=1
+  end
+catch
+  _num_pass=1
+end
+if $_num_pass == 1
+  pass "\$1abc not wrapped as simple var"
+else
+  fail "\$1abc incorrectly wrapped"
+end
+
+_nested_pass=0
+try
+  if $$_nested 2>/dev/null
+    _nested_pass=0
+  else
+    _nested_pass=1
+  end
+catch
+  _nested_pass=1
+end
+if $_nested_pass == 1
+  pass "\$\$var not wrapped as simple var"
+else
+  fail "\$\$var incorrectly wrapped"
+end
 
 echo ""
 echo "========================================"

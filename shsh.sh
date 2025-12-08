@@ -1,4 +1,4 @@
-VERSION="0.31.0"
+VERSION="0.32.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -741,6 +741,41 @@ format_test_operand() {
   esac
 }
 
+is_simple_var() {
+  _isv_cond="$1"
+  case $_isv_cond in
+  '${'*'}')
+    _isv_inner="${_isv_cond#\$\{}"
+    _isv_inner="${_isv_inner%\}}"
+    case $_isv_inner in
+      ""|*[!a-zA-Z0-9_]*)
+        return 1
+        ;;
+      *)
+        return 0
+      ;;
+    esac
+    ;;
+  '$'[0-9])
+    return 0
+    ;;
+  '$'[a-zA-Z_]*)
+    _isv_inner="${_isv_cond#\$}"
+    case $_isv_inner in
+      *[!a-zA-Z0-9_]*)
+        return 1
+        ;;
+      *)
+        return 0
+      ;;
+    esac
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
 emit_condition() {
   keyword="$1" condition="$2" indent="$3" suffix="$4"
   
@@ -749,6 +784,15 @@ emit_condition() {
     format_test_operand "$_ec_left"; _emit_left="$R"
     format_test_operand "$_ec_right"; _emit_right="$R"
     printf '%s\n' "${indent}${keyword} [ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]${suffix}"
+  elif is_simple_var "$condition"; then
+    printf '%s\n' "${indent}${keyword} [ -n \"${condition}\" ]${suffix}"
+  elif str_starts "$condition" "! "; then
+    str_after "$condition" "! "; _ec_negated="$R"
+    if is_simple_var "$_ec_negated"; then
+      printf '%s\n' "${indent}${keyword} [ -z \"${_ec_negated}\" ]${suffix}"
+    else
+      printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
+    fi
   else
     printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
   fi
@@ -1358,7 +1402,7 @@ info() {
 
 case $1 in
   -c)
-    eval "$(printf "$2\n" | transform)"
+    eval "$(printf '%s\n' "$2" | transform)"
     ;;
   -t)
     if [ "$2" = "" ]; then
