@@ -1104,6 +1104,199 @@ _fn_semi_test
 assert_eq "++ in function after semicolon" "$_fn_semi_cnt" "1"
 
 echo ""
+echo "=== Assignment Syntax (var = func) ==="
+
+result = str_before "hello:world" ":"
+assert_eq "basic assignment" "$result" "hello"
+
+result2 = str_after "hello:world" ":"
+assert_eq "str_after assignment" "$result2" "world"
+
+_as_input="one:two:three"
+_as_sep=":"
+part1 = str_before "$_as_input" "$_as_sep"
+assert_eq "assignment with vars" "$part1" "one"
+
+_as_chain="a:b:c:d"
+first = str_before "$_as_chain" ":"
+rest = str_after "$_as_chain" ":"
+second = str_before "$rest" ":"
+assert_eq "chained assign first" "$first" "a"
+assert_eq "chained assign rest" "$rest" "b:c:d"
+assert_eq "chained assign second" "$second" "b"
+
+_as_path="/usr/local/bin/shsh"
+dirname = str_before_last "$_as_path" "/"
+basename = str_after_last "$_as_path" "/"
+assert_eq "str_before_last assign" "$dirname" "/usr/local/bin"
+assert_eq "str_after_last assign" "$basename" "shsh"
+
+trimmed = str_trim "  spaced  "
+assert_eq "str_trim assign" "$trimmed" "spaced"
+
+ltrimmed = str_ltrim "  left"
+assert_eq "str_ltrim assign" "$ltrimmed" "left"
+
+rtrimmed = str_rtrim "right  "
+assert_eq "str_rtrim assign" "$rtrimmed" "right"
+
+_as_indented="    code here"
+ind = str_indent "$_as_indented"
+assert_eq "str_indent assign" "$ind" "    "
+
+_pt_out=$("$_shsh" -t <<'PTEOF'
+x = "literal"
+PTEOF
+)
+assert_eq "passthrough string literal" "$_pt_out" 'x = "literal"'
+
+_pt_out2=$("$_shsh" -t <<'PTEOF'
+y = $somevar
+PTEOF
+)
+assert_eq "passthrough variable" "$_pt_out2" 'y = $somevar'
+
+_pt_out3=$("$_shsh" -t <<'PTEOF'
+z = 
+PTEOF
+)
+assert_eq "passthrough empty RHS" "$_pt_out3" 'z = '
+
+_pt_out4=$("$_shsh" -t <<'PTEOF'
+eq = has=equals
+PTEOF
+)
+assert_eq "passthrough contains equals" "$_pt_out4" 'eq = has=equals'
+
+if true
+  indented_result = str_before "foo:bar" ":"
+  assert_eq "indented assignment" "$indented_result" "foo"
+end
+
+_as_items="a b c"
+_as_count=0
+for item in $_as_items
+  len = str_before "$item$item" "$item"
+  _as_count++
+done
+assert_eq "assignment in loop" "$_as_count" "3"
+
+m1 = str_before "x:y" ":"
+m2 = str_after "x:y" ":"
+assert_eq "multi assign 1" "$m1" "x"
+assert_eq "multi assign 2" "$m2" "y"
+
+array_clear _as_arr
+array_add _as_arr "first"
+array_add _as_arr "second"
+array_len _as_arr; _as_len="$R"
+assert_eq "array_len result" "$_as_len" "2"
+
+arr_len = array_len _as_arr
+
+array_get _as_arr 0
+got = str_before "${R}:" ":"
+assert_eq "mixed R usage" "$got" "first"
+
+echo "test" > /dev/null; semi_assign = str_before "a:b" ":"
+assert_eq "assignment after semicolon" "$semi_assign" "a"
+
+pre_semi = str_after "1:2" ":"; echo "$pre_semi" > /dev/null
+assert_eq "assignment before semicolon" "$pre_semi" "2"
+
+line_a = str_before "p:q" ":"; line_b = str_after "p:q" ":"
+assert_eq "multi semicolon assign a" "$line_a" "p"
+assert_eq "multi semicolon assign b" "$line_b" "q"
+
+map_set _as_map key "value"
+map_get _as_map key
+captured = str_before "${R}!" "!"
+assert_eq "map_get R capture" "$captured" "value"
+
+regular_var="direct"
+assert_eq "regular assignment" "$regular_var" "direct"
+
+arith_test=10
+arith_test += 5
+assert_eq "+= still works" "$arith_test" "15"
+
+arith_test -= 3
+assert_eq "-= still works" "$arith_test" "12"
+
+_under_score = str_before "x:y" ":"
+assert_eq "underscore var assign" "$_under_score" "x"
+
+a = str_before "m:n" ":"
+assert_eq "single char var assign" "$a" "m"
+
+very_long_variable_name_here = str_after "start:end" ":"
+assert_eq "long var name assign" "$very_long_variable_name_here" "end"
+
+_as_nested="one:two:three:four"
+step1 = str_after "$_as_nested" ":"
+step2 = str_after "$step1" ":"
+step3 = str_before "$step2" ":"
+assert_eq "nested step1" "$step1" "two:three:four"
+assert_eq "nested step2" "$step2" "three:four"
+assert_eq "nested step3" "$step3" "three"
+
+_as_if_assign=""
+if true: _as_if_assign = str_before "test:value" ":"
+assert_eq "assignment in inline if" "$_as_if_assign" "test"
+
+_as_while_assign=""
+_as_while_cond=1
+while $_as_while_cond == 1: _as_while_assign = str_after "x:y" ":"; _as_while_cond=0
+assert_eq "assignment in inline while" "$_as_while_assign" "y"
+
+_as_special="hello!@#world"
+spec_result = str_before "$_as_special" "!@#"
+assert_eq "assignment special chars" "$spec_result" "hello"
+
+_as_spaced="first part:second part"
+spaced_result = str_before "$_as_spaced" ":"
+assert_eq "assignment spaced value" "$spaced_result" "first part"
+
+_as_empty=":after"
+empty_before = str_before "$_as_empty" ":"
+assert_eq "assignment empty result" "$empty_before" ""
+
+_as_nomatch="nocolon"
+if str_before "$_as_nomatch" ":"
+  _as_matched="yes"
+else
+  _as_matched="no"
+end
+assert_eq "assignment func returns false" "$_as_matched" "no"
+
+_as_combo="aaa:bbb"
+combo_a = str_before "$_as_combo" ":"; combo_b = str_after "$_as_combo" ":"
+assert_eq "combo assign a" "$combo_a" "aaa"
+assert_eq "combo assign b" "$combo_b" "bbb"
+
+var1 = str_before "num:1" ":"
+var2 = str_after "num:2" ":"
+assert_eq "numeric suffix var1" "$var1" "num"
+assert_eq "numeric suffix var2" "$var2" "2"
+
+_as_long="a:b:c:d:e"
+long_result = str_before "$_as_long" ":"
+assert_eq "long args assign" "$long_result" "a"
+
+_as_transpile_out=$("$_shsh" -t <<'TREOF'
+foo = str_before "x:y" ":"
+TREOF
+)
+assert_eq "transpile assignment" "$_as_transpile_out" 'str_before "x:y" ":"; foo="$R"'
+
+_as_compound=100
+_as_compound += 50
+_as_compound -= 25
+_as_compound *= 2
+_as_compound /= 5
+assert_eq "compound ops still work" "$_as_compound" "50"
+
+echo ""
 echo "=== Single-Line If ==="
 
 x=5

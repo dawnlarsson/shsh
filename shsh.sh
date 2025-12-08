@@ -1,4 +1,10 @@
-VERSION="0.32.0"
+#
+# Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
+# 
+# Apache-2.0 License - Dawn Larsson
+# https://github.com/dawnlarsson/shsh
+
+VERSION="0.33.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -605,6 +611,25 @@ transform_statement() {
       *)
         str_after "$_ts_stmt" " %= "; _ts_val="$R"
         R="${_ts_var}=\$((${_ts_var} % ${_ts_val}))"
+      ;;
+    esac
+    ;;
+  *" = "*)
+    str_before "$_ts_stmt" " = "; _ts_var="$R"
+    case $_ts_var in
+      *[!a-zA-Z0-9_]*|"")
+        R="$_ts_stmt"
+        ;;
+      *)
+        str_after "$_ts_stmt" " = "; _ts_call="$R"
+        case $_ts_call in
+        '"'*|"'"*|'$'*|""|*'='*)
+          R="$_ts_stmt"
+          ;;
+        *)
+          R="${_ts_call}; ${_ts_var}=\"\$R\""
+          ;;
+        esac
       ;;
     esac
     ;;
@@ -1387,6 +1412,8 @@ emit_runtime() {
 
 info() {
     printf "shsh v$VERSION\n\n"
+    printf "Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.\n"
+    printf "By Dawn Larsson - Apache License 2.0 - https://github.com/dawnlarsson/shsh\n\n"
     printf "usage: shsh [command] [args...]\n\n"
     printf "  <script>       run script\n"
     printf "  -c 'code'      run inline code\n"
