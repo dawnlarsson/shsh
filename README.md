@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 571 tests.
+Passing 576 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -579,6 +579,7 @@ echo "Host: $host, Port: $port"   # Host: example.com, Port: 8080
 file_read /etc/hostname              # R=contents (preserves newlines)
 file_write /tmp/out.txt "content"    # write (overwrites)
 file_append /tmp/out.txt "more"      # append
+file_hash /somefile.txt              # file hash
 ```
 
 ### File Tests

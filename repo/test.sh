@@ -134,7 +134,7 @@ array_len multi_del; assert_eq "multi delete len" "$R" "2"
 array_get multi_del 0; assert_eq "multi delete idx0" "$R" "a"
 array_get multi_del 1; assert_eq "multi delete idx1" "$R" "d"
 
-echo ""
+echo
 echo "=== Maps ==="
 
 map_set config "host" "localhost"
@@ -195,7 +195,7 @@ else
   fail "map accepted empty key"
 end
 
-echo ""
+echo
 echo "=== Special Values ==="
 
 array_add spaced "hello world"
@@ -244,7 +244,7 @@ tab_val="a	b"
 map_set tabs "t" "$tab_val"
 map_get tabs "t"; assert_eq "tab char" "$R" "$tab_val"
 
-echo ""
+echo
 echo "=== Conditionals ==="
 
 n=5
@@ -340,7 +340,7 @@ else
   fail "full expression as value"
 end
 
-echo ""
+echo
 echo "=== Functions ==="
 
 classify() {
@@ -386,7 +386,7 @@ fib 10; assert_eq "fib 10" "$R" "55"
 fib 0; assert_eq "fib 0" "$R" "0"
 fib 1; assert_eq "fib 1" "$R" "1"
 
-echo ""
+echo
 echo "=== Loops ==="
 
 x=0
@@ -424,7 +424,7 @@ for a in 1 2
 done
 assert_eq "nested for" "$_nested_for" "1x1y2x2y"
 
-echo ""
+echo
 echo "=== Switch ==="
 
 _sw_result=""
@@ -491,7 +491,7 @@ case bar: _no_match="bar"
 end
 assert_eq "switch no match" "$_no_match" "unchanged"
 
-echo ""
+echo
 echo "=== Tokenizer ==="
 
 tokenize "(add 1 2)" T1
@@ -525,7 +525,7 @@ tokenize "foo bar baz" T_ATOMS
 array_len T_ATOMS; assert_eq "tokenizer atoms" "$R" "3"
 array_get T_ATOMS 1; assert_eq "tokenizer atom 1" "$R" "bar"
 
-echo ""
+echo
 echo "=== Files ==="
 
 file_write /tmp/shsh_test.txt "hello"
@@ -584,7 +584,7 @@ file_read /tmp/shsh_fmt.txt
 assert_eq "file_append format literals" "$R" "$fmt_str
 $fmt_str"
 
-echo ""
+echo
 echo "=== AST Basics ==="
 
 array_clear L1
@@ -596,7 +596,7 @@ array_get L1 1; _v1="$R"
 array_get L1 2; _v2="$R"
 R=$((_v1 + _v2)); assert_eq "AST eval simple" "$R" "10"
 
-echo ""
+echo
 echo "=== Sparse Arrays ==="
 
 array_clear sparse
@@ -631,7 +631,7 @@ else
   fail "empty (ret=$empty_ret) vs missing (ret=$missing_ret) indistinguishable"
 end
 
-echo ""
+echo
 echo "=== Nested Callbacks ==="
 
 array_clear outer_arr
@@ -665,7 +665,7 @@ else
   fail "array_for ignores callback return (no break support)"
 end
 
-echo ""
+echo
 echo "=== Security ==="
 
 INJECTED="no"
@@ -698,7 +698,7 @@ map_set safe "cmd" "$cmd_val"
 map_get safe "cmd"
 assert_eq "cmd substitution stored literally" "$R" '$(echo pwned)'
 
-echo ""
+echo
 echo "=== Nested Transform ==="
 
 nested_transform_test() {
@@ -716,7 +716,7 @@ if 1 == 1
   end
 end
 
-echo ""
+echo
 echo "=== Multiline ==="
 
 ml="line1
@@ -733,7 +733,7 @@ map_set mlmap "key" "$ml"
 map_get mlmap "key"
 assert_eq "multiline in map" "$R" "$ml"
 
-echo ""
+echo
 echo "=== Binary Functions ==="
 
 got=$(hex_capture 'bit_8 0xff 0x00 10')
@@ -790,7 +790,7 @@ assert_eq "bit_128 BE" "$got" "112233445566778899aabbccddeeff00"
 got=$(hex_capture 'bit_128 0xff')
 assert_eq "bit_128 zero pad" "$got" "ff000000000000000000000000000000"
 
-echo ""
+echo
 echo "=== Edge Cases ==="
 
 deep_val=5
@@ -853,7 +853,7 @@ else
 end
 map_get rapid "c"; assert_eq "rapid map c" "$R" "3"
 
-echo ""
+echo
 echo "=== Defaults ==="
 
 empty_default=""
@@ -905,7 +905,7 @@ else
   fail "default accepted invalid name"
 end
 
-echo ""
+echo
 echo "=== Arithmetic Operators ==="
 
 inc_var=5
@@ -1103,7 +1103,7 @@ _fn_semi_test() {
 _fn_semi_test
 assert_eq "++ in function after semicolon" "$_fn_semi_cnt" "1"
 
-echo ""
+echo
 echo "=== Assignment Syntax (var = func) ==="
 
 result = str_before "hello:world" ":"
@@ -1296,7 +1296,7 @@ _as_compound *= 2
 _as_compound /= 5
 assert_eq "compound ops still work" "$_as_compound" "50"
 
-echo ""
+echo
 echo "=== Single-Line If ==="
 
 x=5
@@ -1388,7 +1388,7 @@ assert_eq "colon in value" "$time_val" "12:30:45"
 eof_test="no"
 if 1 == 1: eof_test="yes"
 
-echo ""
+echo
 echo "=== Single-Line Switch Cases ==="
 
 _sl1=""
@@ -1494,7 +1494,7 @@ for i in 1 2 3
 done
 assert_eq "single-line switch in loop" "$_sw_loop" "ABC"
 
-echo ""
+echo
 echo "=== Single-Line Switch Nested Single-Liners ==="
 
 _nested_default=""
@@ -1555,7 +1555,7 @@ switch "go"
 end
 assert_eq "single-line while inside switch" "$_switch_while" "123"
 
-echo ""
+echo
 echo "=== CLI edge cases ==="
 
 _usage_status=0
@@ -1648,7 +1648,7 @@ else
   fail "printf dash-letter works (got: '$_dashopt_out')"
 end
 
-echo ""
+echo
 echo "=== Runtime Helpers ==="
 
 _rt_tmp="/tmp/shsh_rt_$$"
@@ -1677,7 +1677,7 @@ else
   pass "path_writable protected path"
 end
 
-echo ""
+echo
 echo "=== Map Enumeration ==="
 
 map_set enum_map alpha "1"
@@ -1915,7 +1915,7 @@ map_set clear_map fresh "new"
 map_keys clear_map clear_keys2
 array_len clear_keys2; assert_eq "map_clear re-add" "$R" "1"
 
-echo ""
+echo
 echo "=== String Functions ==="
 
 if str_starts "hello world" "hello"
@@ -2459,7 +2459,7 @@ else
   fail "str_contains extended ascii"
 end
 
-echo ""
+echo
 echo "=== Nested Blocks ==="
 
 _nb_result=""
@@ -2651,7 +2651,7 @@ assert_eq "single-line if, outer else taken" "$_nb13_result" "outer_false"
 
 rm -f /tmp/shsh_test.txt /tmp/shsh_test2.txt /tmp/shsh_empty.txt /tmp/shsh_special.txt /tmp/shsh_fmt.txt
 
-echo ""
+echo
 echo "=== Script Argument Passing ==="
 
 printf 'printf "%%s\\n" "$@"\n' > /tmp/shsh_args_test.shsh
@@ -2678,7 +2678,7 @@ assert_eq "positional args \$1 \$2" "$_posarg_out" "first:alpha second:beta"
 
 rm -f /tmp/shsh_args_test.shsh /tmp/shsh_argc_test.shsh /tmp/shsh_posarg_test.shsh
 
-echo ""
+echo
 echo "=== Compiler Output Validation ==="
 
 cat > /tmp/shsh_switch_compile.shsh << 'SHSH'
@@ -2837,7 +2837,7 @@ sh "$_shsh" -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
 _strip_run_out="$(sh /tmp/shsh_strip_run.sh)"
 assert_eq "stripped script runs correctly" "$_strip_run_out" "2"
 
-echo ""
+echo
 echo "=== Tree Shaking ==="
 
 _ts_out=$("$_shsh" -e <<'SHSH'
@@ -3043,7 +3043,7 @@ rm -f /tmp/shsh_switch_default.shsh /tmp/shsh_switch_in_if.shsh /tmp/shsh_while_
 rm -f /tmp/shsh_switch_run.shsh /tmp/shsh_nested_run.shsh /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh
 rm -f /tmp/shsh_strip_test.shsh /tmp/shsh_strip_run.shsh /tmp/shsh_strip_run.sh
 
-echo ""
+echo
 echo "=== Try/Catch ==="
 
 _tc_basic=""
@@ -3283,7 +3283,7 @@ catch
   fail "empty string truthy"
 end
 
-echo ""
+echo
 echo "=== Truthy Variable Edge Cases ==="
 
 _brace_var="value"
@@ -3415,7 +3415,7 @@ else
 end
 assert_eq "elif truthy var" "$_elif_result" "second"
 
-echo ""
+echo
 echo "=== Security / Red Team Tests ==="
 
 
@@ -3659,7 +3659,103 @@ else
   fail "\$\$var incorrectly wrapped"
 end
 
-echo ""
+echo
+echo "=== file_hash ==="
+
+FH_F1="shsh_test_file_hash_1_$$"
+FH_F2="shsh_test_file_hash_2_$$"
+
+
+printf 'hello\n' > "$FH_F1" || {
+  fail "file_hash: setup failed (FH_F1)"
+  exit 1
+}
+
+if file_hash "shsh_no_such_file_$$"; then
+  fail "file_hash: missing file should fail"
+else
+  pass "file_hash: missing file fails"
+fi
+
+if file_hash "$FH_F1"; then
+  FH_HASH1="$R"
+  if [ -n "$FH_HASH1" ]; then
+    pass "file_hash: non-empty hash"
+  else
+    fail "file_hash: hash is empty"
+  fi
+else
+  fail "file_hash: returns non-zero on existing file"
+fi
+
+cp "$FH_F1" "$FH_F2" || {
+  fail "file_hash: setup failed (FH_F2 copy)"
+}
+
+if file_hash "$FH_F2"; then
+  FH_HASH2="$R"
+  if [ "$FH_HASH1" = "$FH_HASH2" ]; then
+    pass "file_hash: identical files share hash"
+  else
+    fail "file_hash: identical files have different hash"
+  fi
+else
+  fail "file_hash: second file hash call failed"
+fi
+
+printf 'world\n' > "$FH_F2" || {
+  fail "file_hash: setup failed (FH_F2 overwrite)"
+}
+
+if file_hash "$FH_F2"; then
+  FH_HASH3="$R"
+  if [ "$FH_HASH1" != "$FH_HASH3" ]; then
+    pass "file_hash: different files differ"
+  else
+    fail "file_hash: different files share hash"
+  fi
+else
+  fail "file_hash: different-content hash call failed"
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  REF_HASH=$(sha256sum "$FH_F1" | awk '{print $1}')
+  if [ "$REF_HASH" = "$FH_HASH1" ]; then
+    pass "file_hash: matches sha256sum"
+  else
+    fail "file_hash: mismatch vs sha256sum"
+  fi
+elif command -v shasum >/dev/null 2>&1; then
+  REF_HASH=$(shasum -a 256 "$FH_F1" | awk '{print $1}')
+  if [ "$REF_HASH" = "$FH_HASH1" ]; then
+    pass "file_hash: matches shasum -a 256"
+  else
+    fail "file_hash: mismatch vs shasum -a 256"
+  fi
+elif command -v md5sum >/dev/null 2>&1; then
+  REF_HASH=$(md5sum "$FH_F1" | awk '{print $1}')
+  if [ "$REF_HASH" = "$FH_HASH1" ]; then
+    pass "file_hash: matches md5sum"
+  else
+    fail "file_hash: mismatch vs md5sum"
+  fi
+elif command -v cksum >/dev/null 2>&1; then
+  # replicate the cksum fallback logic
+  set -- $(cksum "$FH_F1")
+  REF_CRC="$1"
+  REF_HASH=$(printf '%x' "$REF_CRC")
+  if [ "$REF_HASH" = "$FH_HASH1" ]; then
+    pass "file_hash: matches cksum-based hash"
+  else
+    fail "file_hash: mismatch vs cksum-based hash"
+  fi
+else
+  pass "file_hash: tool-compare skipped (no hash utilities)"
+fi
+
+rm -f "$FH_F1" "$FH_F2"
+
+echo
 echo "========================================"
 echo "passed: $PASS"
 echo "failed: $FAIL"

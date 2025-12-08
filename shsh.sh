@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.36.0"
+VERSION="0.37.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -481,6 +481,40 @@ bit_128() {
       *)                   bit_64 "$_b128_lo"; bit_64 "$_b128_hi" ;;
     esac
   done
+}
+
+file_hash() {
+  path="$1"
+
+  if ! file_exists "$path"; then
+    return 1
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    out=$(sha256sum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    out=$(shasum -a 256 "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v md5sum >/dev/null 2>&1; then
+    out=$(md5sum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v cksum >/dev/null 2>&1; then
+    out=$(cksum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  return 1
 }
 # __RUNTIME_END__
 
