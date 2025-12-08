@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.33.0"
+VERSION="0.34.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1142,6 +1142,14 @@ emit_runtime_stripped() {
     if str_starts "$_ers_line" "# __RUNTIME_END__": break
     if $_ers_in_rt == 0: continue
     switch "$_ers_line"
+    case *"() {"*"}"
+      str_before "$_ers_line" "()"; _ers_cur_fn="$R"
+      str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
+      _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
+      str_after "$_ers_line" "() { "; _ers_cur_body="$R"
+      str_before "$_ers_cur_body" " }"; _ers_cur_body="$R"
+      eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
+      _ers_cur_fn=""
     case *"() {"*
       str_before "$_ers_line" "()"; _ers_cur_fn="$R"
       str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
@@ -1176,37 +1184,64 @@ emit_runtime_stripped() {
     end
   done
   
-  _ers_emit=0 _ers_skip=0
+  _ers_combined="$_ers_source"
+  for _ers_fn in $_ers_all_fns
+    switch "$_rt_needed"
+    case *" $_ers_fn "*
+      eval "_ers_combined=\"\$_ers_combined \$_rt_body_$_ers_fn\""
+    end
+  done
+  
+  _ers_emit=0 _ers_skip=0 _ers_in_func=0
   while IFS= read -r _ers_line || nonempty "$_ers_line"
     switch $_ers_emit
     case 0
       if str_starts "$_ers_line" "# __RUNTIME_START__"
         _ers_emit=1
-        printf "$_ers_line\n"
       end
     case 1
       if str_starts "$_ers_line" "# __RUNTIME_END__"
-        printf "$_ers_line\n"
         _ers_emit=2
       else
         switch "$_ers_line"
+        case *"() {"*"}"
+          str_before "$_ers_line" "()"; _ers_fn="$R"
+          str_ltrim "$_ers_fn"; _ers_fn="$R"
+          switch "$_rt_needed"
+          case *" $_ers_fn "*
+            printf '%s\n' "$_ers_line"
+          end
         case *"() {"*
           str_before "$_ers_line" "()"; _ers_fn="$R"
           str_ltrim "$_ers_fn"; _ers_fn="$R"
           switch "$_rt_needed"
           case *" $_ers_fn "*
             _ers_skip=0
-            printf "$_ers_line\n"
-          default: _ers_skip=1
+            _ers_in_func=1
+            printf '%s\n' "$_ers_line"
+          default
+            _ers_skip=1
+            _ers_in_func=0
           end
         case "}"
           if $_ers_skip == 0
-            printf "$_ers_line\n"
+            printf '%s\n' "$_ers_line"
           end
           _ers_skip=0
+          _ers_in_func=0
         case ""
-          if $_ers_skip == 0
+          if $_ers_skip == 0 && $_ers_in_func == 1
             printf "\n"
+          end
+        case *"="*
+          if $_ers_in_func == 0
+            str_before "$_ers_line" "="; _ers_varname="$R"
+            switch "$_ers_combined"
+            case *'$'"$_ers_varname"*|*'$'"{$_ers_varname"*
+              printf '%s\n' "$_ers_line"
+            end
+          elif $_ers_skip == 0
+            printf '%s\n' "$_ers_line"
           end
         default
           if $_ers_skip == 0

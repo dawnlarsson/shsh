@@ -1,7 +1,8 @@
 # shsh
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
-Passing 550 tests.
+
+Passing 571 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 

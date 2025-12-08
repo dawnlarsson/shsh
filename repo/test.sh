@@ -2837,6 +2837,207 @@ sh "$_shsh" -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
 _strip_run_out="$(sh /tmp/shsh_strip_run.sh)"
 assert_eq "stripped script runs correctly" "$_strip_run_out" "2"
 
+echo ""
+echo "=== Tree Shaking ==="
+
+_ts_out=$("$_shsh" -e <<'SHSH'
+echo "hello"
+SHSH
+)
+if str_contains "$_ts_out" "__RUNTIME_START__"
+  fail "tree shake: should not contain runtime markers"
+else
+  pass "tree shake: no runtime markers"
+end
+
+_ts_pure=$("$_shsh" -e <<'SHSH'
+x=1
+echo $x
+SHSH
+)
+assert_eq "tree shake: pure shell no runtime" "$_ts_pure" 'x=1
+echo $x'
+
+_ts_str=$("$_shsh" -e <<'SHSH'
+str_before "a:b" ":"
+echo $R
+SHSH
+)
+if str_contains "$_ts_str" "str_before()"
+  pass "tree shake: includes str_before"
+else
+  fail "tree shake: should include str_before"
+end
+if str_contains "$_ts_str" "str_after()"
+  fail "tree shake: should not include str_after"
+else
+  pass "tree shake: excludes str_after"
+end
+if str_contains "$_ts_str" "array_add()"
+  fail "tree shake: should not include array_add"
+else
+  pass "tree shake: excludes array_add"
+end
+
+_ts_dep=$("$_shsh" -e <<'SHSH'
+array_add items "x"
+SHSH
+)
+if str_contains "$_ts_dep" "array_add()"
+  pass "tree shake: includes array_add"
+else
+  fail "tree shake: should include array_add"
+end
+if str_contains "$_ts_dep" "_shsh_check_name()"
+  pass "tree shake: includes dependency _shsh_check_name"
+else
+  fail "tree shake: should include _shsh_check_name dependency"
+end
+
+_ts_tok=$("$_shsh" -e <<'SHSH'
+tokenize "(a)" t
+SHSH
+)
+if str_contains "$_ts_tok" "_shsh_sq="
+  pass "tree shake: includes _shsh_sq for tokenize"
+else
+  fail "tree shake: should include _shsh_sq for tokenize"
+end
+if str_contains "$_ts_tok" "_shsh_dq="
+  pass "tree shake: includes _shsh_dq for tokenize"
+else
+  fail "tree shake: should include _shsh_dq for tokenize"
+end
+
+_ts_noq=$("$_shsh" -e <<'SHSH'
+str_before "a:b" ":"
+SHSH
+)
+if str_contains "$_ts_noq" "_shsh_sq="
+  fail "tree shake: should not include _shsh_sq"
+else
+  pass "tree shake: excludes _shsh_sq when unused"
+end
+
+_ts_bit=$("$_shsh" -e <<'SHSH'
+bit_16 0x1234
+SHSH
+)
+if str_contains "$_ts_bit" "ENDIAN="
+  pass "tree shake: includes ENDIAN for bit_16"
+else
+  fail "tree shake: should include ENDIAN for bit_16"
+end
+
+_ts_noend=$("$_shsh" -e <<'SHSH'
+array_add x "y"
+SHSH
+)
+if str_contains "$_ts_noend" "ENDIAN="
+  fail "tree shake: should not include ENDIAN"
+else
+  pass "tree shake: excludes ENDIAN when unused"
+end
+
+_ts_multi=$("$_shsh" -e <<'SHSH'
+str_before "a:b" ":"
+str_after "a:b" ":"
+map_set m k v
+SHSH
+)
+if str_contains "$_ts_multi" "str_before()"
+  pass "tree shake: multi includes str_before"
+else
+  fail "tree shake: multi should include str_before"
+end
+if str_contains "$_ts_multi" "str_after()"
+  pass "tree shake: multi includes str_after"
+else
+  fail "tree shake: multi should include str_after"
+end
+if str_contains "$_ts_multi" "map_set()"
+  pass "tree shake: multi includes map_set"
+else
+  fail "tree shake: multi should include map_set"
+end
+
+if str_contains "$_ts_multi" "_shsh_sane()"
+  pass "tree shake: includes transitive dep _shsh_sane"
+else
+  fail "tree shake: should include transitive dep _shsh_sane"
+end
+
+_ts_run_src='
+array_add nums 10
+array_add nums 20
+array_add nums 30
+array_len nums
+echo "len=$R"
+array_get nums 1
+echo "val=$R"
+'
+_ts_run_out=$("$_shsh" -e <<SHSH
+$_ts_run_src
+SHSH
+)
+_ts_run_result=$(echo "$_ts_run_out" | sh)
+assert_eq "tree shake: stripped script runs" "$_ts_run_result" "len=3
+val=20"
+
+_ts_map_out=$("$_shsh" -e <<'SHSH'
+map_set conf host "localhost"
+map_set conf port "8080"
+map_get conf host
+echo "host=$R"
+if map_has conf port
+  echo "has port"
+end
+SHSH
+)
+_ts_map_result=$(echo "$_ts_map_out" | sh)
+assert_eq "tree shake: map script runs" "$_ts_map_result" "host=localhost
+has port"
+
+_ts_str_out=$("$_shsh" -e <<'SHSH'
+str_before "hello:world" ":"
+a="$R"
+str_after "hello:world" ":"
+b="$R"
+str_trim "  spaced  "
+c="$R"
+echo "$a|$b|$c"
+SHSH
+)
+_ts_str_result=$(echo "$_ts_str_out" | sh)
+assert_eq "tree shake: string script runs" "$_ts_str_result" "hello|world|spaced"
+
+_ts_blank=$("$_shsh" -e <<'SHSH'
+str_before "x:y" ":"
+SHSH
+)
+_ts_blank_lines=$(printf '%s\n' "$_ts_blank" | grep -c '^$' || true)
+if "$_ts_blank_lines" == "0"
+  pass "tree shake: no blank lines"
+else
+  fail "tree shake: has $ts_blank_lines blank lines"
+end
+
+_ts_complex=$("$_shsh" -e <<'SHSH'
+default host "localhost"
+array_add items "one"
+array_add items "two"
+cb() { echo "item: $R"; }
+array_for items cb
+map_set cfg key "value"
+map_get cfg key
+echo "cfg=$R"
+SHSH
+)
+_ts_complex_result=$(echo "$_ts_complex" | sh)
+assert_eq "tree shake: complex script runs" "$_ts_complex_result" "item: one
+item: two
+cfg=value"
+
 rm -f /tmp/shsh_switch_compile.shsh /tmp/shsh_nested_switch.shsh /tmp/shsh_3level_switch.shsh
 rm -f /tmp/shsh_switch_default.shsh /tmp/shsh_switch_in_if.shsh /tmp/shsh_while_colon.shsh
 rm -f /tmp/shsh_switch_run.shsh /tmp/shsh_nested_run.shsh /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh
