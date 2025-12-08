@@ -6,7 +6,6 @@ set -e
 URL="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
 
 printf "shsh installer\n"
-printf "==============\n\n"
 
 printf "downloading shsh...\n"
 TMP=$(mktemp)
@@ -20,8 +19,6 @@ else
   printf "error: curl or wget required\n" >&2
   exit 1
 fi
-
-chmod +x "$TMP"
 
 # Find best install location
 DEST=""
@@ -47,6 +44,7 @@ if [ -z "$DEST" ]; then
   mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
   DEST="$HOME/.local/bin/shsh"
   NEEDS_PATH=1
+  echo "no suitable install location found in PATH, using $DEST"
 fi
 
 DEST_DIR=$(dirname "$DEST")
@@ -64,9 +62,7 @@ else
   printf "installing to %s (requires sudo)...\n" "$DEST"
   sudo cp "$TMP" "$DEST"
   sudo chmod +x "$DEST"
-  case "$DEST" in
-    "$HOME"/*) sudo chown "$USER" "$DEST" ;;
-  esac
+  sudo chown "$USER" "$DEST"
   printf "installed: %s\n" "$DEST"
 fi
 

@@ -1543,11 +1543,7 @@ case $1 in
     else
       printf "installing to %s (requires sudo)...\n" "$_install_dest"
       sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
-      case "$_install_dest" in
-        "$HOME"/*)
-          sudo chown "$USER" "$_install_dest"
-        ;;
-      esac
+      sudo chown "$USER" "$_install_dest"
       printf "installed: %s\n" "$_install_dest"
     fi
     
@@ -1678,11 +1674,7 @@ case $1 in
     else
       printf "installing to %s (requires sudo)...\n" "$_dest"
       sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
-      case "$_dest" in
-        "$HOME"/*)
-          sudo chown "$USER" "$_dest"
-        ;;
-      esac
+      sudo chown "$USER" "$_dest"
       printf "updated: %s\n" "$_dest"
     fi
     
