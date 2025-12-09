@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 576 tests.
+Passing 598 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -93,9 +93,14 @@ shsh version
 if shsh doesn't receive any of the arguments above or a file path, it's assumed
 the rest of the arguments is an inline script. If the result is in `$R`, it's printed automatically.
 ```sh
-shsh echo "this is an inline script"
-shsh file_hash README.md              # prints hash directly
-shsh 'str_before "hello:world" ":"'   # prints: hello
+$ shsh echo "this is an inline script"
+this is an inline script
+
+$ shsh file_hash README.md
+b45208b09b3d702a6606920bdc60f85786b3127c92451b1d5ced88b11bfeb408
+
+$ shsh file_exists README.md && echo yes!
+yes!
 ```
 
 ---
@@ -152,6 +157,30 @@ if ! $disabled
   echo "not disabled"
 end
 ```
+
+### Chained Conditions
+
+Combine multiple conditions with `&&` (and) or `||` (or):
+```sh
+if $x > 0 && $x < 100
+  echo "x is between 0 and 100"
+end
+
+if "$mode" == "dev" || "$mode" == "test"
+  echo "non-production mode"
+end
+
+if $enabled && "$name" != ""
+  echo "enabled with name"
+end
+```
+
+Works with single-line syntax too:
+```sh
+if $a == 1 && $b == 2: echo "both match"
+```
+
+### Shell Tests
 
 Use standard shell commands for file tests:
 ```sh
@@ -277,6 +306,80 @@ try
 catch
   echo "Outer failed: $error"
 end
+```
+
+---
+
+## Testing
+
+Write tests using the `test` block syntax:
+
+```sh
+test "my feature works" {
+  result="hello"
+  test_equals "$result" "hello"
+}
+
+test "math is correct" {
+  sum=$((2 + 2))
+  test_equals "$sum" "4"
+}
+```
+
+### Test Assertions
+
+```sh
+test_equals "$actual" "$expected"       # pass if equal
+test_not_equals "$actual" "$unexpected" # pass if not equal
+test_true "$value"                      # pass if value is "true" or "1"
+test_false "$value"                     # pass if value is "false" or "0"
+test_ok                                 # pass if last command succeeded ($? == 0)
+test_err                                # pass if last command failed ($? != 0)
+```
+
+### String Assertions
+
+```sh
+test_contains "$haystack" "$needle"     # pass if haystack contains needle
+test_starts "$string" "$prefix"         # pass if string starts with prefix
+test_ends "$string" "$suffix"           # pass if string ends with suffix
+```
+
+### File Assertions
+
+```sh
+test_file_exists "/path/to/file"        # pass if regular file exists
+test_dir_exists "/path/to/dir"          # pass if directory exists
+```
+
+### Manual Pass/Fail
+
+```sh
+test_pass                               # explicitly pass
+test_fail                               # explicitly fail
+```
+
+### Example: Testing a Function
+
+```sh
+add() {
+  R=$(($1 + $2))
+}
+
+test "add positive numbers" {
+  add 2 3
+  test_equals "$R" "5"
+}
+
+test "add negative numbers" {
+  add -5 3
+  test_equals "$R" "-2"
+}
+
+test "add zero" {
+  add 0 0
+  test_equals "$R" "0"
+}
 ```
 
 ---

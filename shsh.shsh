@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.39.0"
+VERSION="0.40.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -516,11 +516,165 @@ file_hash() {
 
   return 1
 }
+
+if "$_shsh_tmp_counter" == ""
+  _shsh_tmp_counter=0
+end
+
+tmp_file() {
+  base="$TMPDIR"
+  if "$base" == ""
+    base="/tmp"
+  end
+
+  while true
+    _shsh_tmp_counter=$((_shsh_tmp_counter + 1))
+    name="shsh_$$_${_shsh_tmp_counter}.tmp"
+    path="$base/$name"
+
+    if ! file_exists "$path"
+      : > "$path" || return 1
+      R="$path"
+      return 0
+    end
+  done
+}
+
+tmp_dir() {
+  base="$TMPDIR"
+  if "$base" == ""
+    base="/tmp"
+  end
+
+  while true
+    _shsh_tmp_counter=$((_shsh_tmp_counter + 1))
+    name="shsh_$$_${_shsh_tmp_counter}.d"
+    path="$base/$name"
+
+    if mkdir "$path" 2>/dev/null
+      R="$path"
+      return 0
+    end
+  done
+}
+
+_shsh_test_pass=0
+_shsh_test_fail=0
+_shsh_test_name=""
+
+test_start() {
+  _shsh_test_name="$1"
+}
+
+test_end() {
+  if [ "$_shsh_test_fail" -gt 0 ]; then
+    printf '\n%s passed, %s failed\n' "$_shsh_test_pass" "$_shsh_test_fail"
+    exit 1
+  else
+    printf '\n%s passed\n' "$_shsh_test_pass"
+  fi
+}
+
+test_pass() {
+  printf '✓ %s\n' "$_shsh_test_name"
+  _shsh_test_pass=$((_shsh_test_pass + 1))
+}
+
+test_fail() {
+  printf '✗ %s: %s\n' "$_shsh_test_name" "$1"
+  _shsh_test_fail=$((_shsh_test_fail + 1))
+}
+
+test_equals() {
+  if [ "$1" = "$2" ]; then
+    test_pass
+  else
+    test_fail "expected '$2', got '$1'"
+  fi
+}
+
+test_not_equals() {
+  if [ "$1" != "$2" ]; then
+    test_pass
+  else
+    test_fail "expected not '$2', got '$1'"
+  fi
+}
+
+test_true() {
+  if [ "$1" = "1" ] || [ "$1" = "true" ]; then
+    test_pass
+  else
+    test_fail "expected true, got '$1'"
+  fi
+}
+
+test_false() {
+  if [ "$1" = "0" ] || [ "$1" = "false" ] || [ -z "$1" ]; then
+    test_pass
+  else
+    test_fail "expected false, got '$1'"
+  fi
+}
+
+test_ok() {
+  if [ "$1" -eq 0 ]; then
+    test_pass
+  else
+    test_fail "expected exit code 0, got '$1'"
+  fi
+}
+
+test_err() {
+  if [ "$1" -ne 0 ]; then
+    test_pass
+  else
+    test_fail "expected non-zero exit code, got 0"
+  fi
+}
+
+test_contains() {
+  case "$1" in
+    *"$2"*) test_pass ;;
+    *) test_fail "'$1' does not contain '$2'" ;;
+  esac
+}
+
+test_starts() {
+  case "$1" in
+    "$2"*) test_pass ;;
+    *) test_fail "'$1' does not start with '$2'" ;;
+  esac
+}
+
+test_ends() {
+  case "$1" in
+    *"$2") test_pass ;;
+    *) test_fail "'$1' does not end with '$2'" ;;
+  esac
+}
+
+test_file_exists() {
+  if [ -f "$1" ]; then
+    test_pass
+  else
+    test_fail "file '$1' does not exist"
+  fi
+}
+
+test_dir_exists() {
+  if [ -d "$1" ]; then
+    test_pass
+  else
+    test_fail "directory '$1' does not exist"
+  fi
+}
 # __RUNTIME_END__
 
 block_stack=""
 single_line_if_active=0
 single_line_if_indent=""
+test_block_name=""
 
 COLON_SPACE=":"
 COLON_SPACE="$COLON_SPACE "
@@ -770,25 +924,73 @@ is_simple_var() {
   end
 }
 
+emit_single_condition() {
+  _esc_cond="$1"
+  if is_comparison "$_esc_cond"
+    parse_comparison "$_esc_cond"
+    format_test_operand "$_ec_left"; _emit_left="$R"
+    format_test_operand "$_ec_right"; _emit_right="$R"
+    R="[ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]"
+  elif is_simple_var "$_esc_cond"
+    R="[ -n \"${_esc_cond}\" ]"
+  elif str_starts "$_esc_cond" "! "
+    str_after "$_esc_cond" "! "; _esc_negated="$R"
+    if is_simple_var "$_esc_negated"
+      R="[ -z \"${_esc_negated}\" ]"
+    else
+      R="$_esc_cond"
+    end
+  else
+    R="$_esc_cond"
+  end
+}
+
 emit_condition() {
   keyword="$1" condition="$2" indent="$3" suffix="$4"
   
-  if is_comparison "$condition"
-    parse_comparison "$condition"
-    format_test_operand "$_ec_left"; _emit_left="$R"
-    format_test_operand "$_ec_right"; _emit_right="$R"
-    printf '%s\n' "${indent}${keyword} [ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]${suffix}"
-  elif is_simple_var "$condition"
-    printf '%s\n' "${indent}${keyword} [ -n \"${condition}\" ]${suffix}"
-  elif str_starts "$condition" "! "
-    str_after "$condition" "! "; _ec_negated="$R"
-    if is_simple_var "$_ec_negated"
-      printf '%s\n' "${indent}${keyword} [ -z \"${_ec_negated}\" ]${suffix}"
-    else
-      printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
-    end
+  if str_contains "$condition" " && " || str_contains "$condition" " || "
+    _emc_result="" _emc_rest="$condition" _emc_first=1 _emc_prev_op=""
+    while [ -n "$_emc_rest" ]
+      _emc_op=""
+      if str_contains "$_emc_rest" " && "
+        _emc_and_pos="${_emc_rest%% && *}"
+        _emc_and_len="${#_emc_and_pos}"
+      else
+        _emc_and_len=999999
+      end
+      if str_contains "$_emc_rest" " || "
+        _emc_or_pos="${_emc_rest%% || *}"
+        _emc_or_len="${#_emc_or_pos}"
+      else
+        _emc_or_len=999999
+      end
+      
+      if [ "$_emc_and_len" -lt "$_emc_or_len" ]
+        str_before "$_emc_rest" " && "; _emc_part="$R"
+        str_after "$_emc_rest" " && "; _emc_rest="$R"
+        _emc_op=" && "
+      elif [ "$_emc_or_len" -lt 999999 ]
+        str_before "$_emc_rest" " || "; _emc_part="$R"
+        str_after "$_emc_rest" " || "; _emc_rest="$R"
+        _emc_op=" || "
+      else
+        _emc_part="$_emc_rest"
+        _emc_rest=""
+      end
+      
+      emit_single_condition "$_emc_part"
+      if [ "$_emc_first" = "1" ]
+        _emc_result="$R"
+        _emc_first=0
+      else
+        _emc_result="$_emc_result$_emc_prev_op$R"
+      end
+      _emc_prev_op="$_emc_op"
+    done
+    printf '%s\n' "${indent}${keyword} ${_emc_result}${suffix}"
   else
-    printf '%s\n' "${indent}${keyword} ${condition}${suffix}"
+    emit_single_condition "$condition"
+    printf '%s\n' "${indent}${keyword} ${R}${suffix}"
   end
 }
 
@@ -945,6 +1147,32 @@ transform_line() {
       printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
     end
   
+  case "test "*" {"*
+    str_after "$stripped" "test "; _test_rest="$R"
+    str_before "$_test_rest" " {"; _test_name="$R"
+    # Remove quotes from test name
+    switch $_test_name
+    case '"'*'"'
+      _test_name="${_test_name#\"}"
+      _test_name="${_test_name%\"}"
+    case "'"*"'"
+      _test_name="${_test_name#\'}"
+      _test_name="${_test_name%\'}"
+    end
+    test_block_name="$_test_name"
+    _has_tests=1
+    printf "${indent}test_start %s\n" "'$_test_name'"
+    push T
+  
+  case "}"
+    peek
+    if "$R" == "T"
+      pop
+      test_block_name=""
+    else
+      printf '%s\n' "$line"
+    end
+
   case "try"
     try_depth_inc
     printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
@@ -1156,10 +1384,13 @@ transform() {
   single_line_if_indent=""
   switch_first_case_stack=""
   try_depth=0
+  test_block_name=""
+  _has_tests=0
   
   while IFS= read -r current_line || nonempty "$current_line": transform_line "$current_line"
   
   if $single_line_if_active == 1: printf "${single_line_if_indent}fi\n"
+  if $_has_tests == 1: printf "test_end\n"
 }
 
 run_file() {
@@ -1264,8 +1495,10 @@ emit_runtime_stripped() {
           _ers_skip=0
           _ers_in_func=0
         case ""
-          if $_ers_skip == 0 && $_ers_in_func == 1
-            printf "\n"
+          if $_ers_skip == 0
+            if $_ers_in_func == 1
+              printf "\n"
+            end
           end
         case *"="*
           if $_ers_in_func == 0
@@ -1279,7 +1512,9 @@ emit_runtime_stripped() {
           end
         default
           if $_ers_skip == 0
-            printf '%s\n' "$_ers_line"
+            if $_ers_in_func == 1
+              printf '%s\n' "$_ers_line"
+            end
           end
         end
       end
