@@ -1012,6 +1012,55 @@ done"
   done
 }
 
+bench_static_access() {
+  section "Static Access (Optimization Proof)"
+  
+  # These benchmarks test compile-time optimized array/map access
+  # With literal names and indices, shsh emits direct variable access
+  # instead of calling runtime functions with eval
+  
+  subsection "Static array_get (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+array_add static_arr 'value'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  array_get static_arr 0
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_array_get_$shell=$_time"
+  done
+  
+  subsection "Static array_set (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  array_set static_arr 0 'value'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_array_set_$shell=$_time"
+  done
+  
+  subsection "Static map_get (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+map_set static_map 'key' 'value'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  map_get static_map 'key'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_map_get_$shell=$_time"
+  done
+}
+
 ########################################
 # SUMMARY
 ########################################
@@ -1100,6 +1149,12 @@ print_summary() {
   print_summary_row "array_unset" "time_arr_unset"
   print_summary_row "array_remove" "time_arr_remove"
   print_summary_row "array_clear" "time_arr_clear"
+
+  # Static access
+  printf "${CYAN}Static Access${RESET}\n"
+  print_summary_row "static array_get" "time_static_array_get"
+  print_summary_row "static array_set" "time_static_array_set"
+  print_summary_row "static map_get" "time_static_map_get"
   
   # Maps
   printf "${CYAN}Maps${RESET}\n"
@@ -1162,6 +1217,7 @@ main() {
   bench_tokenize
   bench_binary
   bench_realworld
+  bench_static_access
   
   print_summary
   

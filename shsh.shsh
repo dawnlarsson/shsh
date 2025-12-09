@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.40.0"
+VERSION="0.41.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -790,6 +790,59 @@ transform_statement() {
   end
 }
 
+# Static array/map optimization - emit direct variable access when names/indices are literals
+optimize_array_call() {
+  _oac_stmt="$1"
+  switch $_oac_stmt
+  case "array_get "*
+    str_after "$_oac_stmt" "array_get "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_idx="$R"
+    switch $_oac_name
+    case ""|*[!a-zA-Z0-9_]*: R="$_oac_stmt"; return 1
+    end
+    switch $_oac_idx
+    case ""|*[!0-9]*: R="$_oac_stmt"; return 1
+    end
+    R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ -n \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
+    return 0
+  case "array_set "*
+    str_after "$_oac_stmt" "array_set "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_idx="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    switch $_oac_name
+    case ""|*[!a-zA-Z0-9_]*: R="$_oac_stmt"; return 1
+    end
+    switch $_oac_idx
+    case ""|*[!0-9]*: R="$_oac_stmt"; return 1
+    end
+    R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
+    return 0
+  case "map_get "*
+    str_after "$_oac_stmt" "map_get "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_key="$R"
+    # Strip quotes from key
+    switch $_oac_key
+    case '"'*'"': _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
+    case "'"*"'": _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
+    end
+    switch $_oac_name
+    case ""|*[!a-zA-Z0-9_]*: R="$_oac_stmt"; return 1
+    end
+    switch $_oac_key
+    case ""|*[!a-zA-Z0-9_]*: R="$_oac_stmt"; return 1
+    end
+    R="R=\"\${__shsh_map_${_oac_name}_${_oac_key}}\""
+    return 0
+  default
+    R="$_oac_stmt"
+    return 1
+  end
+}
+
 transform_semicolon_parts() {
   _tsp_line="$1"
   _tsp_out=""
@@ -798,12 +851,16 @@ transform_semicolon_parts() {
   while str_contains "$_tsp_line" "; "
     str_before "$_tsp_line" "; "; _tsp_part="$R"
     str_after "$_tsp_line" "; "; _tsp_line="$R"
-    transform_statement "$_tsp_part"
+    if ! optimize_array_call "$_tsp_part"
+      transform_statement "$_tsp_part"
+    end
     _tsp_out="$_tsp_out$_tsp_sep$R"
     _tsp_sep="; "
   done
   
-  transform_statement "$_tsp_line"
+  if ! optimize_array_call "$_tsp_line"
+    transform_statement "$_tsp_line"
+  end
   _tsp_out="$_tsp_out$_tsp_sep$R"
   R="$_tsp_out"
 }
