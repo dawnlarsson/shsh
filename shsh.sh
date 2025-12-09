@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.41.0"
+VERSION="0.42.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -828,13 +828,15 @@ transform_statement() {
 }
 
 # Static array/map optimization - emit direct variable access when names/indices are literals
-optimize_array_call() {
+optimize_static() {
   _oac_stmt="$1"
   case $_oac_stmt in
+  
   "array_get "*)
     str_after "$_oac_stmt" "array_get "; _oac_rest="$R"
     str_before "$_oac_rest" " "; _oac_name="$R"
     str_after "$_oac_rest" " "; _oac_idx="$R"
+    
     case $_oac_name in
     ""|*[!a-zA-Z0-9_]*)
       R="$_oac_stmt"; return 1
@@ -845,33 +847,16 @@ optimize_array_call() {
       R="$_oac_stmt"; return 1
       ;;
     esac
-    R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ -n \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
+    
+    R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
     return 0
-    ;;
-  "array_set "*)
-    str_after "$_oac_stmt" "array_set "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_idx="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_idx in
-    ""|*[!0-9]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
-    return 0
+
     ;;
   "map_get "*)
     str_after "$_oac_stmt" "map_get "; _oac_rest="$R"
     str_before "$_oac_rest" " "; _oac_name="$R"
     str_after "$_oac_rest" " "; _oac_key="$R"
-    # Strip quotes from key
+    
     case $_oac_key in
     '"'*'"')
       _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
@@ -890,8 +875,188 @@ optimize_array_call() {
       R="$_oac_stmt"; return 1
       ;;
     esac
+    
     R="R=\"\${__shsh_map_${_oac_name}_${_oac_key}}\""
     return 0
+
+    ;;
+  "map_has "*)
+    str_after "$_oac_stmt" "map_has "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_key="$R"
+    
+    case $_oac_key in
+    '"'*'"')
+      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
+      ;;
+    "'"*"'")
+      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
+      ;;
+    esac
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    case $_oac_key in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    
+    R="[ \"\${__shsh_map_${_oac_name}_${_oac_key}+x}\" ]"
+    return 0
+    
+    ;;
+  "array_len "*)
+    str_after "$_oac_stmt" "array_len "; _oac_name="$R"
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    R="R=\"\${__shsh_${_oac_name}_n:-0}\""
+    return 0
+
+    ;;
+  "array_set "*)
+    str_after "$_oac_stmt" "array_set "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_idx="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    case $_oac_idx in
+    ""|*[!0-9]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    
+    R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
+    return 0
+
+    ;;
+  "map_set "*)
+    str_after "$_oac_stmt" "map_set "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_key="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    
+    case $_oac_key in
+    '"'*'"')
+      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
+      ;;
+    "'"*"'")
+      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
+      ;;
+    esac
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    case $_oac_key in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    
+    R="__shsh_map_${_oac_name}_${_oac_key}=${_oac_val}; [ \"\${__shsh_map_${_oac_name}_${_oac_key}__exists}\" ] || { __shsh_map_${_oac_name}_${_oac_key}__exists=1; _ms_i=\${__shsh_mapkeys_${_oac_name}_n:-0}; eval \"__shsh_mapkeys_${_oac_name}_\$_ms_i=\\\"${_oac_key}\\\"\"; __shsh_mapkeys_${_oac_name}_n=\$((_ms_i + 1)); }"
+    return 0
+
+    ;;
+  "map_delete "*)
+    str_after "$_oac_stmt" "map_delete "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_key="$R"
+    
+    case $_oac_key in
+    '"'*'"')
+      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
+      ;;
+    "'"*"'")
+      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
+      ;;
+    esac
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    case $_oac_key in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    
+    R="unset __shsh_map_${_oac_name}_${_oac_key}"
+    return 0
+
+    ;;
+  "array_clear "*)
+    str_after "$_oac_stmt" "array_clear "; _oac_name="$R"
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    R="__shsh_${_oac_name}_n=0"
+    return 0
+
+    ;;
+  "array_add "*)
+    str_after "$_oac_stmt" "array_add "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    
+    case $_oac_val in
+    '"'*'"')
+      _oac_inner="${_oac_val#\"}"
+      _oac_inner="${_oac_inner%\"}"
+      case $_oac_inner in
+      *'"'*|*'\'*)
+        R="$_oac_stmt"
+        return 1
+        ;;
+      *)
+        R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_inner}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
+        ;;
+      esac
+      ;;
+    "'"*"'")
+      _oac_inner="${_oac_val#\'}"
+      _oac_inner="${_oac_inner%\'}"
+      case $_oac_inner in
+      *'"'*)
+        R="$_oac_stmt"
+        return 1
+        ;;
+      *)
+        R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_inner}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
+        ;;
+      esac
+      ;;
+    '$'*)
+      R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
+      ;;
+    *)
+      R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
+      ;;
+    esac
+    return 0
+
     ;;
   *)
     R="$_oac_stmt"
@@ -908,14 +1073,14 @@ transform_semicolon_parts() {
   while str_contains "$_tsp_line" "; "; do
     str_before "$_tsp_line" "; "; _tsp_part="$R"
     str_after "$_tsp_line" "; "; _tsp_line="$R"
-    if ! optimize_array_call "$_tsp_part"; then
+    if ! optimize_static "$_tsp_part"; then
       transform_statement "$_tsp_part"
     fi
     _tsp_out="$_tsp_out$_tsp_sep$R"
     _tsp_sep="; "
   done
   
-  if ! optimize_array_call "$_tsp_line"; then
+  if ! optimize_static "$_tsp_line"; then
     transform_statement "$_tsp_line"
   fi
   _tsp_out="$_tsp_out$_tsp_sep$R"

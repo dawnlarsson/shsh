@@ -1046,6 +1046,47 @@ done"
     eval "time_static_array_set_$shell=$_time"
   done
   
+  subsection "Static array_add (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  array_add static_arr 'value'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_array_add_$shell=$_time"
+  done
+  
+  subsection "Static array_len (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+array_add static_arr 'value'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  array_len static_arr
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_array_len_$shell=$_time"
+  done
+  
+  subsection "Static array_clear (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  array_add static_arr 'value'
+  array_clear static_arr
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_array_clear_$shell=$_time"
+  done
+  
   subsection "Static map_get (${ITERATIONS} iterations)"
   for shell in $SHELLS; do
     _code="
@@ -1058,6 +1099,47 @@ done"
     _time=$(run_bench "$shell" "$_code")
     printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
     eval "time_static_map_get_$shell=$_time"
+  done
+  
+  subsection "Static map_set (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  map_set static_map key 'value'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_map_set_$shell=$_time"
+  done
+  
+  subsection "Static map_has (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+map_set static_map key 'value'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  map_has static_map key
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_map_has_$shell=$_time"
+  done
+  
+  subsection "Static map_delete (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  map_set static_map key 'value'
+  map_delete static_map key
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_map_delete_$shell=$_time"
   done
 }
 
@@ -1154,7 +1236,13 @@ print_summary() {
   printf "${CYAN}Static Access${RESET}\n"
   print_summary_row "static array_get" "time_static_array_get"
   print_summary_row "static array_set" "time_static_array_set"
+  print_summary_row "static array_add" "time_static_array_add"
+  print_summary_row "static array_len" "time_static_array_len"
+  print_summary_row "static array_clear" "time_static_array_clear"
   print_summary_row "static map_get" "time_static_map_get"
+  print_summary_row "static map_set" "time_static_map_set"
+  print_summary_row "static map_has" "time_static_map_has"
+  print_summary_row "static map_delete" "time_static_map_delete"
   
   # Maps
   printf "${CYAN}Maps${RESET}\n"

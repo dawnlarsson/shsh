@@ -5081,27 +5081,29 @@ SHSH
   end
 }
 
-test "tree shake: includes array_add" {
+test "tree shake: includes array_add or inlines" {
   _ts_dep=$("$_shsh" build <<'SHSH'
 array_add items "x"
 SHSH
 )
-  if str_contains "$_ts_dep" "array_add()"
+  # With static optimization, array_add is inlined for literal names
+  if str_contains "$_ts_dep" "array_add()" || str_contains "$_ts_dep" "__shsh_items_"
     test_pass
   else
-    test_fail "should include array_add"
+    test_fail "should include array_add or inline it"
   end
 }
 
-test "tree shake: includes dependency _shsh_check_name" {
+test "tree shake: includes dependency or inlines" {
   _ts_dep=$("$_shsh" build <<'SHSH'
 array_add items "x"
 SHSH
 )
-  if str_contains "$_ts_dep" "_shsh_check_name()"
+  # With static optimization, no runtime dependency needed for literal names
+  if str_contains "$_ts_dep" "_shsh_check_name()" || str_contains "$_ts_dep" "__shsh_items_"
     test_pass
   else
-    test_fail "should include _shsh_check_name dependency"
+    test_fail "should include _shsh_check_name or inline"
   end
 }
 
@@ -5187,19 +5189,21 @@ test "tree shake: multi includes str_after" {
   end
 }
 
-test "tree shake: multi includes map_set" {
-  if str_contains "$_ts_multi" "map_set()"
+test "tree shake: multi includes map_set or inlines" {
+  # With static optimization, map_set is inlined for literal names/keys
+  if str_contains "$_ts_multi" "map_set()" || str_contains "$_ts_multi" "__shsh_map_m_k="
     test_pass
   else
-    test_fail "multi should include map_set"
+    test_fail "multi should include map_set or inline it"
   end
 }
 
-test "tree shake: includes transitive dep _shsh_sane" {
-  if str_contains "$_ts_multi" "_shsh_sane()"
+test "tree shake: includes transitive dep or inlines" {
+  # With static optimization, no transitive dependency needed for inlined code
+  if str_contains "$_ts_multi" "_shsh_sane()" || str_contains "$_ts_multi" "__shsh_map_m_k="
     test_pass
   else
-    test_fail "should include transitive dep _shsh_sane"
+    test_fail "should include transitive dep or inline"
   end
 }
 
