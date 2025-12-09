@@ -91,9 +91,11 @@ shsh version
 ```
 
 if shsh doesn't receive any of the arguments above or a file path, it's assumed
-the rest of the arguments is a inline script
+the rest of the arguments is an inline script. If the result is in `$R`, it's printed automatically.
 ```sh
-shsh echo "this is now a inline script"
+shsh echo "this is an inline script"
+shsh file_hash README.md              # prints hash directly
+shsh 'str_before "hello:world" ":"'   # prints: hello
 ```
 
 ---

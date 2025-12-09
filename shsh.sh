@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.38.0"
+VERSION="0.39.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1722,7 +1722,11 @@ case $1 in
     if file_exists "$1"; then
       run_file "$@"
     else
+      R=""
       eval "$(printf '%s\n' "$*" | transform)"
+      if [ "$R" != "" ]; then
+        printf '%s\n' "$R"
+      fi
     fi
   ;;
 esac
