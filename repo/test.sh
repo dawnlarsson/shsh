@@ -1144,25 +1144,25 @@ _as_indented="    code here"
 ind = str_indent "$_as_indented"
 assert_eq "str_indent assign" "$ind" "    "
 
-_pt_out=$("$_shsh" -t <<'PTEOF'
+_pt_out=$("$_shsh" raw <<'PTEOF'
 x = "literal"
 PTEOF
 )
 assert_eq "passthrough string literal" "$_pt_out" 'x = "literal"'
 
-_pt_out2=$("$_shsh" -t <<'PTEOF'
+_pt_out2=$("$_shsh" raw <<'PTEOF'
 y = $somevar
 PTEOF
 )
 assert_eq "passthrough variable" "$_pt_out2" 'y = $somevar'
 
-_pt_out3=$("$_shsh" -t <<'PTEOF'
+_pt_out3=$("$_shsh" raw <<'PTEOF'
 z = 
 PTEOF
 )
 assert_eq "passthrough empty RHS" "$_pt_out3" 'z = '
 
-_pt_out4=$("$_shsh" -t <<'PTEOF'
+_pt_out4=$("$_shsh" raw <<'PTEOF'
 eq = has=equals
 PTEOF
 )
@@ -1283,7 +1283,7 @@ _as_long="a:b:c:d:e"
 long_result = str_before "$_as_long" ":"
 assert_eq "long args assign" "$long_result" "a"
 
-_as_transpile_out=$("$_shsh" -t <<'TREOF'
+_as_transpile_out=$("$_shsh" raw <<'TREOF'
 foo = str_before "x:y" ":"
 TREOF
 )
@@ -1581,50 +1581,50 @@ else
   _shsh_path="$_shsh"
 end
 
-_dash_c_out=$("$_shsh_path" -c 'echo hi')
+_dash_c_out=$("$_shsh_path" 'echo hi')
 if "$_dash_c_out" == "hi"
-  pass "-c prints inline output"
+  pass "prints inline output"
 else
-  fail "-c prints inline output (got: '$_dash_c_out')"
+  fail "prints inline output (got: '$_dash_c_out')"
 end
 
-_mod_c_out=$("$_shsh_path" -c 'val=$((17 % 5)); echo "$val"' 2>&1)
+_mod_c_out=$("$_shsh_path" 'val=$((17 % 5)); echo "$val"' 2>&1)
 if "$_mod_c_out" == "2"
-  pass "-c modulo operator"
+  pass "modulo operator"
 else
-  fail "-c modulo operator (got: '$_mod_c_out')"
+  fail "modulo operator (got: '$_mod_c_out')"
 end
 
-_mod_multi_out=$("$_shsh_path" -c 'a=$((100 % 30)); b=$((a % 7)); echo "$b"' 2>&1)
+_mod_multi_out=$("$_shsh_path" 'a=$((100 % 30)); b=$((a % 7)); echo "$b"' 2>&1)
 if "$_mod_multi_out" == "3"
-  pass "-c chained modulo"
+  pass "chained modulo"
 else
-  fail "-c chained modulo (got: '$_mod_multi_out')"
+  fail "chained modulo (got: '$_mod_multi_out')"
 end
 
-_pct_str_out=$("$_shsh_path" -c 'x="50%"; echo "$x"' 2>&1)
+_pct_str_out=$("$_shsh_path" 'x="50%"; echo "$x"' 2>&1)
 if "$_pct_str_out" == "50%"
-  pass "-c percent in string"
+  pass "percent in string"
 else
-  fail "-c percent in string (got: '$_pct_str_out')"
+  fail "percent in string (got: '$_pct_str_out')"
 end
 
 _stdin_code="x=7"
-_stdin_t_out=$(printf "%s\n" "$_stdin_code" | "$_shsh_path" -t -)
+_stdin_t_out=$(printf "%s\n" "$_stdin_code" | "$_shsh_path" raw -)
 if "$_stdin_t_out" == "$_stdin_code"
-  pass "-t reads from stdin"
+  pass "raw reads from stdin"
 else
-  fail "-t reads from stdin (got: '$_stdin_t_out')"
+  fail "raw reads from stdin (got: '$_stdin_t_out')"
 end
 
 _test_file="/tmp/shsh_cli_test_$$.shsh"
 printf '%s\n' 'x=1' > "$_test_file"
-_transform_out=$("$_shsh_path" -t "$_test_file" 2>&1)
+_transform_out=$("$_shsh_path" raw "$_test_file" 2>&1)
 rm -f "$_test_file"
 if "$_transform_out" == "x=1"
-  pass "-t with file doesn't hang"
+  pass "raw with file doesn't hang"
 else
-  fail "-t with file doesn't hang (got: '$_transform_out')"
+  fail "raw with file doesn't hang (got: '$_transform_out')"
 end
 
 _dash_out=$(printf "%s" "-")
@@ -2687,7 +2687,7 @@ switch $x
   case b: echo b
 end
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_compile.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_switch_compile.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch compilation produces valid shell"
 else
@@ -2704,7 +2704,7 @@ switch $outer
   case b: echo b
 end
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_nested_switch.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_nested_switch.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "nested switch compilation produces valid shell"
 else
@@ -2725,7 +2725,7 @@ switch $a
   case 2: echo 2
 end
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_3level_switch.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_3level_switch.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "3-level nested switch compilation valid"
 else
@@ -2738,7 +2738,7 @@ switch $x
   default: echo other
 end
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_default.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_switch_default.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch with default compilation valid"
 else
@@ -2753,7 +2753,7 @@ if $cond == 1
   end
 end
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_switch_in_if.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_switch_in_if.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "switch inside if compilation valid"
 else
@@ -2765,7 +2765,7 @@ i=0
 while $i < 3: i=$((i + 1))
 echo done
 SHSH
-_compiled="$(sh "$_shsh" -t /tmp/shsh_while_colon.shsh)"
+_compiled="$(sh "$_shsh" raw /tmp/shsh_while_colon.shsh)"
 if sh -n -c "$_compiled" 2>/dev/null
   pass "single-line while compilation valid"
 else
@@ -2805,9 +2805,9 @@ SHSH
 _nested_out="$(sh "$_shsh" /tmp/shsh_nested_run.shsh)"
 assert_eq "nested switch runs correctly" "$_nested_out" "axaybb"
 
-sh "$_shsh" -t $_shsh_src > /tmp/shsh_boot1.sh
+sh "$_shsh" raw $_shsh_src > /tmp/shsh_boot1.sh
 chmod +x /tmp/shsh_boot1.sh
-sh /tmp/shsh_boot1.sh -t $_shsh_src > /tmp/shsh_boot2.sh
+sh /tmp/shsh_boot1.sh raw $_shsh_src > /tmp/shsh_boot2.sh
 if diff -q /tmp/shsh_boot1.sh /tmp/shsh_boot2.sh >/dev/null 2>&1
   pass "bootstrap produces stable output"
 else
@@ -2817,14 +2817,14 @@ end
 cat > /tmp/shsh_strip_test.shsh << 'SHSH'
 echo "simple"
 SHSH
-_strip_out="$(sh "$_shsh" -e /tmp/shsh_strip_test.shsh)"
-_full_out="$(sh "$_shsh" -E /tmp/shsh_strip_test.shsh)"
+_strip_out="$(sh "$_shsh" build /tmp/shsh_strip_test.shsh)"
+_full_out="$(sh "$_shsh" build_full /tmp/shsh_strip_test.shsh)"
 _strip_lines="$(printf '%s\n' "$_strip_out" | wc -l)"
 _full_lines="$(printf '%s\n' "$_full_out" | wc -l)"
 if $_strip_lines < $_full_lines
-  pass "emit -e strips unused runtime functions"
+  pass "build strips unused runtime functions"
 else
-  fail "emit -e should produce smaller output than -E"
+  fail "build should produce smaller output than build_full"
 end
 
 cat > /tmp/shsh_strip_run.shsh << 'SHSH'
@@ -2833,14 +2833,14 @@ array_add items "b"
 array_len items
 echo "$R"
 SHSH
-sh "$_shsh" -e /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
+sh "$_shsh" build /tmp/shsh_strip_run.shsh > /tmp/shsh_strip_run.sh
 _strip_run_out="$(sh /tmp/shsh_strip_run.sh)"
 assert_eq "stripped script runs correctly" "$_strip_run_out" "2"
 
 echo
 echo "=== Tree Shaking ==="
 
-_ts_out=$("$_shsh" -e <<'SHSH'
+_ts_out=$("$_shsh" build <<'SHSH'
 echo "hello"
 SHSH
 )
@@ -2850,7 +2850,7 @@ else
   pass "tree shake: no runtime markers"
 end
 
-_ts_pure=$("$_shsh" -e <<'SHSH'
+_ts_pure=$("$_shsh" build <<'SHSH'
 x=1
 echo $x
 SHSH
@@ -2858,7 +2858,7 @@ SHSH
 assert_eq "tree shake: pure shell no runtime" "$_ts_pure" 'x=1
 echo $x'
 
-_ts_str=$("$_shsh" -e <<'SHSH'
+_ts_str=$("$_shsh" build <<'SHSH'
 str_before "a:b" ":"
 echo $R
 SHSH
@@ -2879,7 +2879,7 @@ else
   pass "tree shake: excludes array_add"
 end
 
-_ts_dep=$("$_shsh" -e <<'SHSH'
+_ts_dep=$("$_shsh" build <<'SHSH'
 array_add items "x"
 SHSH
 )
@@ -2894,7 +2894,7 @@ else
   fail "tree shake: should include _shsh_check_name dependency"
 end
 
-_ts_tok=$("$_shsh" -e <<'SHSH'
+_ts_tok=$("$_shsh" build <<'SHSH'
 tokenize "(a)" t
 SHSH
 )
@@ -2909,7 +2909,7 @@ else
   fail "tree shake: should include _shsh_dq for tokenize"
 end
 
-_ts_noq=$("$_shsh" -e <<'SHSH'
+_ts_noq=$("$_shsh" build <<'SHSH'
 str_before "a:b" ":"
 SHSH
 )
@@ -2919,7 +2919,7 @@ else
   pass "tree shake: excludes _shsh_sq when unused"
 end
 
-_ts_bit=$("$_shsh" -e <<'SHSH'
+_ts_bit=$("$_shsh" build <<'SHSH'
 bit_16 0x1234
 SHSH
 )
@@ -2929,7 +2929,7 @@ else
   fail "tree shake: should include ENDIAN for bit_16"
 end
 
-_ts_noend=$("$_shsh" -e <<'SHSH'
+_ts_noend=$("$_shsh" build <<'SHSH'
 array_add x "y"
 SHSH
 )
@@ -2939,7 +2939,7 @@ else
   pass "tree shake: excludes ENDIAN when unused"
 end
 
-_ts_multi=$("$_shsh" -e <<'SHSH'
+_ts_multi=$("$_shsh" build <<'SHSH'
 str_before "a:b" ":"
 str_after "a:b" ":"
 map_set m k v
@@ -2976,7 +2976,7 @@ echo "len=$R"
 array_get nums 1
 echo "val=$R"
 '
-_ts_run_out=$("$_shsh" -e <<SHSH
+_ts_run_out=$("$_shsh" build <<SHSH
 $_ts_run_src
 SHSH
 )
@@ -2984,7 +2984,7 @@ _ts_run_result=$(echo "$_ts_run_out" | sh)
 assert_eq "tree shake: stripped script runs" "$_ts_run_result" "len=3
 val=20"
 
-_ts_map_out=$("$_shsh" -e <<'SHSH'
+_ts_map_out=$("$_shsh" build <<'SHSH'
 map_set conf host "localhost"
 map_set conf port "8080"
 map_get conf host
@@ -2998,7 +2998,7 @@ _ts_map_result=$(echo "$_ts_map_out" | sh)
 assert_eq "tree shake: map script runs" "$_ts_map_result" "host=localhost
 has port"
 
-_ts_str_out=$("$_shsh" -e <<'SHSH'
+_ts_str_out=$("$_shsh" build <<'SHSH'
 str_before "hello:world" ":"
 a="$R"
 str_after "hello:world" ":"
@@ -3011,7 +3011,7 @@ SHSH
 _ts_str_result=$(echo "$_ts_str_out" | sh)
 assert_eq "tree shake: string script runs" "$_ts_str_result" "hello|world|spaced"
 
-_ts_blank=$("$_shsh" -e <<'SHSH'
+_ts_blank=$("$_shsh" build <<'SHSH'
 str_before "x:y" ":"
 SHSH
 )
@@ -3022,7 +3022,7 @@ else
   fail "tree shake: has $ts_blank_lines blank lines"
 end
 
-_ts_complex=$("$_shsh" -e <<'SHSH'
+_ts_complex=$("$_shsh" build <<'SHSH'
 default host "localhost"
 array_add items "one"
 array_add items "two"

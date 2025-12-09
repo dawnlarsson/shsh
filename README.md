@@ -71,7 +71,7 @@ shsh hello.shsh Alice    # Hello, Alice!
 
 Generate standalone POSIX script:
 ```sh
-shsh -e hello.shsh > hello.sh
+shsh build hello.shsh > hello.sh
 chmod +x hello.sh
 ./hello.sh               # runs without shsh installed
 ```
@@ -79,15 +79,21 @@ chmod +x hello.sh
 ## Usage
 
 ```sh
-shsh script.shsh         # run script
-shsh -c 'i=0; i++; echo $i'   # run inline code
-shsh -e script.shsh      # emit standalone POSIX script (tree-shaken)
-shsh -E script.shsh      # emit standalone with full runtime
-shsh -t script.shsh      # transform only (show compiled output)
-shsh -                   # read from stdin
-shsh install             # install to system
-shsh uninstall           # remove from system
-shsh update              # update from github
+shsh script.shsh            # run script
+shsh build script.shsh      # emit standalone POSIX script (tree-shaken)
+shsh build_full script.shsh # emit standalone with full runtime
+shsh raw script.shsh        # transform only
+shsh -                      # read from stdin
+shsh install                # install to system
+shsh uninstall              # remove from system
+shsh update                 # update from github
+shsh version
+```
+
+if shsh doesn't receive any of the arguments above or a file path, it's assumed
+the rest of the arguments is a inline script
+```sh
+shsh echo "this is now a inline script"
 ```
 
 ---
@@ -748,7 +754,7 @@ shsh is self-hosting (written in shsh):
 
 ```sh
 # Rebuild from source
-sh shsh.sh -t shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh && chmod +x shsh.sh
+./shsh.sh raw shsh.shsh > _shsh.sh && mv _shsh.sh shsh.sh && chmod +rwx shsh.sh
 
 # Run tests
 ./shsh.sh repo/test.sh

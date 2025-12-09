@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.37.0"
+VERSION="0.38.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1489,23 +1489,19 @@ info() {
     printf "Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.\n"
     printf "By Dawn Larsson - Apache License 2.0 - https://github.com/dawnlarsson/shsh\n\n"
     printf "usage: shsh [command] [args...]\n\n"
-    printf "  <script>       run script\n"
-    printf "  -c 'code'      run inline code\n"
-    printf "  -t [script]    transform (file or stdin)\n"
-    printf "  -e [script]    emit standalone (stripped runtime)\n"
-    printf "  -E [script]    emit standalone (full runtime)\n"
-    printf "  -              read from stdin\n"
-    printf "  install        install to system\n"
-    printf "  uninstall      remove from system\n"
-    printf "  update         update from github (sudo)\n"
-    printf "  version        show version\n"
+    printf "  <script>               run script file or inline input directly\n"
+    printf "  raw [script]           transform (file or stdin)\n"
+    printf "  build [script]         emit standalone (stripped runtime)\n"
+    printf "  build_full [script]    emit standalone (full runtime)\n"
+    printf "  -                      read from stdin\n"
+    printf "  install                install to system\n"
+    printf "  uninstall              remove from system\n"
+    printf "  update                 update from github (sudo)\n"
+    printf "  version                show version\n"
 }
 
 case $1 in
-  -c)
-    eval "$(printf '%s\n' "$2" | transform)"
-    ;;
-  -t)
+  raw)
     if [ "$2" = "" ]; then
       transform
     elif [ "$2" = "-" ]; then
@@ -1514,7 +1510,7 @@ case $1 in
       transform < "$2"
     fi
     ;;
-  -e)
+  build)
     if [ "$2" = "" ]; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
@@ -1525,7 +1521,7 @@ case $1 in
       printf "$_es_code\n"
     fi
     ;;
-  -E)
+  build_full)
     emit_runtime
     if [ "$2" = "" ]; then
       transform
@@ -1533,14 +1529,17 @@ case $1 in
       transform < "$2"
     fi
     ;;
-  -v)
-    printf "shsh $VERSION\n"
-    ;;
   version)
     printf "shsh $VERSION\n"
     ;;
   -)
     eval "$(transform)"
+    ;;
+  -*)
+    info
+    ;;
+  "")
+    info
     ;;
   install)
     _install_dest=""
@@ -1719,13 +1718,11 @@ case $1 in
       printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
     fi
     ;;
-  "")
-    info
-    ;;
-  -*)
-    info
-    ;;
   *)
-    run_file "$@"
+    if file_exists "$1"; then
+      run_file "$@"
+    else
+      eval "$(printf '%s\n' "$*" | transform)"
+    fi
   ;;
 esac

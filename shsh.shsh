@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.37.0"
+VERSION="0.38.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1319,21 +1319,19 @@ info() {
     printf "Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.\n"
     printf "By Dawn Larsson - Apache License 2.0 - https://github.com/dawnlarsson/shsh\n\n"
     printf "usage: shsh [command] [args...]\n\n"
-    printf "  <script>       run script\n"
-    printf "  -c 'code'      run inline code\n"
-    printf "  -t [script]    transform (file or stdin)\n"
-    printf "  -e [script]    emit standalone (stripped runtime)\n"
-    printf "  -E [script]    emit standalone (full runtime)\n"
-    printf "  -              read from stdin\n"
-    printf "  install        install to system\n"
-    printf "  uninstall      remove from system\n"
-    printf "  update         update from github (sudo)\n"
-    printf "  version        show version\n"
+    printf "  <script>               run script file or inline input directly\n"
+    printf "  raw [script]           transform (file or stdin)\n"
+    printf "  build [script]         emit standalone (stripped runtime)\n"
+    printf "  build_full [script]    emit standalone (full runtime)\n"
+    printf "  -                      read from stdin\n"
+    printf "  install                install to system\n"
+    printf "  uninstall              remove from system\n"
+    printf "  update                 update from github (sudo)\n"
+    printf "  version                show version\n"
 }
 
 switch $1
-  case -c:        eval "$(printf '%s\n' "$2" | transform)"
-  case -t
+  case raw
     if "$2" == ""
       transform
     elif "$2" == "-"
@@ -1341,7 +1339,7 @@ switch $1
     else
       transform < "$2"
     end
-  case -e
+  case build
     if "$2" == ""
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
@@ -1351,13 +1349,14 @@ switch $1
       emit_runtime_stripped "$_es_code"
       printf "$_es_code\n"
     end
-  case -E
+  case build_full
     emit_runtime
     if "$2" == "": transform
     else: transform < "$2"
-  case -v:        printf "shsh $VERSION\n"
   case version:   printf "shsh $VERSION\n"
   case -:         eval "$(transform)"
+  case -*:        info
+  case "":        info
   case install
     _install_dest=""
     _install_needs_path=0
@@ -1516,7 +1515,10 @@ switch $1
     else
       printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
     end
-  case "": info
-  case -*: info
-  default: run_file "$@"
+  default
+    if file_exists "$1"
+      run_file "$@"
+    else
+      eval "$(printf '%s\n' "$*" | transform)"
+    end
 end
