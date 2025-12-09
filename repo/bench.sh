@@ -1144,6 +1144,121 @@ done"
 }
 
 ########################################
+# BENCHMARK: Static String Optimizations
+########################################
+bench_static_strings() {
+  section "Static String Optimizations"
+  
+  # Static str_contains - inlined case statement
+  subsection "Static str_contains (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+testvar='hello world'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  case \"\$testvar\" in *\"lo wo\"*) ;; *) false;; esac
+  case \"\$testvar\" in *\"xyz\"*) ;; *) false;; esac
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_str_contains_$shell=$_time"
+  done
+  
+  # Static str_starts - inlined case statement
+  subsection "Static str_starts (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+testvar='hello world'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  case \"\$testvar\" in \"hello\"*) ;; *) false;; esac
+  case \"\$testvar\" in \"world\"*) ;; *) false;; esac
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_str_starts_$shell=$_time"
+  done
+  
+  # Static str_ends - inlined case statement  
+  subsection "Static str_ends (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+testvar='hello world'
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  case \"\$testvar\" in *\"world\") ;; *) false;; esac
+  case \"\$testvar\" in *\"hello\") ;; *) false;; esac
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_str_ends_$shell=$_time"
+  done
+  
+  # Static file_exists - direct test
+  subsection "Static file_exists (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  [ -f /etc/passwd ]
+  [ -f /nonexistent ]
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_file_exists_$shell=$_time"
+  done
+  
+  # Static dir_exists - direct test
+  subsection "Static dir_exists (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  [ -d /tmp ]
+  [ -d /nonexistent ]
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_dir_exists_$shell=$_time"
+  done
+  
+  # Static default - inlined conditional
+  subsection "Static default (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  unset myvar
+  [ -z \"\${myvar}\" ] && myvar='default_value'
+  myvar='existing'
+  [ -z \"\${myvar}\" ] && myvar='ignored'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_default_$shell=$_time"
+  done
+  
+  # Static default_unset - inlined conditional
+  subsection "Static default_unset (${ITERATIONS} iterations)"
+  for shell in $SHELLS; do
+    _code="
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  unset myvar
+  [ -z \"\${myvar+x}\" ] && myvar='default_value'
+  myvar=''
+  [ -z \"\${myvar+x}\" ] && myvar='ignored'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_static_default_unset_$shell=$_time"
+  done
+}
+
+########################################
 # SUMMARY
 ########################################
 
@@ -1243,6 +1358,16 @@ print_summary() {
   print_summary_row "static map_set" "time_static_map_set"
   print_summary_row "static map_has" "time_static_map_has"
   print_summary_row "static map_delete" "time_static_map_delete"
+
+  # Static string optimizations
+  printf "${CYAN}Static Strings${RESET}\n"
+  print_summary_row "static str_contains" "time_static_str_contains"
+  print_summary_row "static str_starts" "time_static_str_starts"
+  print_summary_row "static str_ends" "time_static_str_ends"
+  print_summary_row "static file_exists" "time_static_file_exists"
+  print_summary_row "static dir_exists" "time_static_dir_exists"
+  print_summary_row "static default" "time_static_default"
+  print_summary_row "static default_unset" "time_static_default_unset"
   
   # Maps
   printf "${CYAN}Maps${RESET}\n"
@@ -1306,6 +1431,7 @@ main() {
   bench_binary
   bench_realworld
   bench_static_access
+  bench_static_strings
   
   print_summary
   

@@ -4,7 +4,7 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.42.0"
+VERSION="0.43.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -1055,6 +1055,339 @@ optimize_static() {
       R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
       ;;
     esac
+    return 0
+
+    ;;
+  "str_before_last "*)
+    str_after "$_oac_stmt" "str_before_last "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_arg1="$R"
+    str_after "$_oac_rest" " "; _oac_arg2="$R"
+    
+    case $_oac_arg2 in
+    '"'*'"')
+      _oac_delim="${_oac_arg2#\"}"
+      _oac_delim="${_oac_delim%\"}"
+      ;;
+    "'"*"'")
+      _oac_delim="${_oac_arg2#\'}"
+      _oac_delim="${_oac_delim%\'}"
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_after_last "*)
+    str_after "$_oac_stmt" "str_after_last "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_arg1="$R"
+    str_after "$_oac_rest" " "; _oac_arg2="$R"
+    
+    case $_oac_arg2 in
+    '"'*'"')
+      _oac_delim="${_oac_arg2#\"}"
+      _oac_delim="${_oac_delim%\"}"
+      ;;
+    "'"*"'")
+      _oac_delim="${_oac_arg2#\'}"
+      _oac_delim="${_oac_delim%\'}"
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_contains "*)
+    str_after "$_oac_stmt" "str_contains "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_arg1="$R"
+    str_after "$_oac_rest" " "; _oac_arg2="$R"
+    
+    case $_oac_arg2 in
+    '"'*'"')
+      _oac_delim="${_oac_arg2#\"}"
+      _oac_delim="${_oac_delim%\"}"
+      ;;
+    "'"*"'")
+      _oac_delim="${_oac_arg2#\'}"
+      _oac_delim="${_oac_delim%\'}"
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\"*) ;; *) false;; esac"
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_starts "*)
+    str_after "$_oac_stmt" "str_starts "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_arg1="$R"
+    str_after "$_oac_rest" " "; _oac_arg2="$R"
+    
+    case $_oac_arg2 in
+    '"'*'"')
+      _oac_delim="${_oac_arg2#\"}"
+      _oac_delim="${_oac_delim%\"}"
+      ;;
+    "'"*"'")
+      _oac_delim="${_oac_arg2#\'}"
+      _oac_delim="${_oac_delim%\'}"
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="case \"\$${_oac_varname}\" in \"${_oac_delim}\"*) ;; *) false;; esac"
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_ends "*)
+    str_after "$_oac_stmt" "str_ends "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_arg1="$R"
+    str_after "$_oac_rest" " "; _oac_arg2="$R"
+    
+    case $_oac_arg2 in
+    '"'*'"')
+      _oac_delim="${_oac_arg2#\"}"
+      _oac_delim="${_oac_delim%\"}"
+      ;;
+    "'"*"'")
+      _oac_delim="${_oac_arg2#\'}"
+      _oac_delim="${_oac_delim%\'}"
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\") ;; *) false;; esac"
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_trim "*)
+    str_after "$_oac_stmt" "str_trim "; _oac_arg1="$R"
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_ltrim "*)
+    str_after "$_oac_stmt" "str_ltrim "; _oac_arg1="$R"
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_rtrim "*)
+    str_after "$_oac_stmt" "str_rtrim "; _oac_arg1="$R"
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "str_indent "*)
+    str_after "$_oac_stmt" "str_indent "; _oac_arg1="$R"
+    
+    case $_oac_arg1 in
+    '"$'*'"')
+      _oac_tmp="${_oac_arg1#\"\$}"
+      _oac_varname="${_oac_tmp%\"}"
+      case $_oac_varname in
+      ""|*[!a-zA-Z0-9_]*)
+        R="$_oac_stmt"; return 1
+        ;;
+      esac
+      R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
+      return 0
+      ;;
+    *)
+      R="$_oac_stmt"
+      return 1
+      ;;
+    esac
+
+    ;;
+  "file_exists "*)
+    str_after "$_oac_stmt" "file_exists "; _oac_path="$R"
+    R="[ -f ${_oac_path} ]"
+    return 0
+
+    ;;
+  "dir_exists "*)
+    str_after "$_oac_stmt" "dir_exists "; _oac_path="$R"
+    R="[ -d ${_oac_path} ]"
+    return 0
+
+    ;;
+  "file_executable "*)
+    str_after "$_oac_stmt" "file_executable "; _oac_path="$R"
+    R="[ -x ${_oac_path} ]"
+    return 0
+
+    ;;
+  "path_writable "*)
+    str_after "$_oac_stmt" "path_writable "; _oac_path="$R"
+    R="[ -w ${_oac_path} ]"
+    return 0
+
+    ;;
+  "default "*)
+    str_after "$_oac_stmt" "default "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    R="[ -z \"\${${_oac_name}}\" ] && ${_oac_name}=${_oac_val}"
+    return 0
+
+    ;;
+  "default_unset "*)
+    str_after "$_oac_stmt" "default_unset "; _oac_rest="$R"
+    str_before "$_oac_rest" " "; _oac_name="$R"
+    str_after "$_oac_rest" " "; _oac_val="$R"
+    case $_oac_name in
+    ""|*[!a-zA-Z0-9_]*)
+      R="$_oac_stmt"; return 1
+      ;;
+    esac
+    R="[ -z \"\${${_oac_name}+x}\" ] && ${_oac_name}=${_oac_val}"
     return 0
 
     ;;
