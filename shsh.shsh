@@ -12,11 +12,11 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.44.0"
+VERSION="0.45.0"
 
 # __RUNTIME_START__
-_shsh_sq=$(printf "\047")
-_shsh_dq=$(printf "\042")
+_shsh_sq="'"
+_shsh_dq='"'
 
 _shsh_sane() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
 
@@ -1349,8 +1349,10 @@ format_test_operand() {
     R="$_fto_val"
   case '$'*
     R="\"$_fto_val\""
-  default
+  case *[!a-zA-Z0-9_.-]*|""
     R="\"$_fto_val\""
+  default
+    R="$_fto_val"
   end
 }
 
@@ -1525,6 +1527,73 @@ transform_line() {
   
   switch $stripped
   
+  case ""
+    printf '\n'
+  
+  case "end"
+    peek
+    if "$R" == "s"
+      printf "${indent}  ;;\n"
+      printf "${indent}esac\n"
+      switch_pop_first
+      pop
+    elif "$R" == "i"
+      printf "${indent}fi\n"
+      pop
+    elif "$R" == "c"
+      printf "${indent}fi\n"
+      try_depth_dec
+      pop
+    elif "$R" == "t"
+      printf "${indent}_shsh_brk_$try_depth=1; done\n"
+      try_depth_dec
+      pop
+    end
+  
+  case "else"
+    printf "${indent}else\n"
+  
+  case "done"
+    printf "${indent}done\n"
+    if in_try_block
+      current_try_depth
+      printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
+    end
+  
+  case "}"
+    peek
+    if "$R" == "T"
+      pop
+      test_block_name=""
+    else
+      printf '%s\n' "$line"
+    end
+
+  case "default"
+    peek
+    if "$R" == "s"
+      if ! switch_is_first: printf "${indent}  ;;\n"
+      switch_set_not_first
+      printf "${indent}*)\n"
+    else
+      printf '%s\n' "$line"
+    end
+  
+  case "try"
+    try_depth_inc
+    printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
+    push t
+  
+  case "catch"
+    peek
+    if "$R" == "t"
+      printf "${indent}_shsh_brk_$try_depth=1; done\n${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
+      pop
+      push c
+    else
+      printf '%s\n' "$line"
+    end
+
   case "if "*
     str_after "$stripped" "if "; rest="$R"
     if str_contains "$rest" "$COLON_SPACE"
@@ -1565,9 +1634,6 @@ transform_line() {
       single_line_if_active=0
     end
   
-  case "else"
-    printf "${indent}else\n"
-  
   case "while "*
     str_after "$stripped" "while "; expression="$R"
     if str_contains "$expression" "$COLON_SPACE"
@@ -1593,13 +1659,6 @@ transform_line() {
       printf "${indent}${stripped}; do\n"
     end
   
-  case "done"
-    printf "${indent}done\n"
-    if in_try_block
-      current_try_depth
-      printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
-    end
-  
   case "test "*" {"*
     str_after "$stripped" "test "; _test_rest="$R"
     str_before "$_test_rest" " {"; _test_name="$R"
@@ -1616,30 +1675,6 @@ transform_line() {
     _has_tests=1
     printf "${indent}test_start %s\n" "'$_test_name'"
     push T
-  
-  case "}"
-    peek
-    if "$R" == "T"
-      pop
-      test_block_name=""
-    else
-      printf '%s\n' "$line"
-    end
-
-  case "try"
-    try_depth_inc
-    printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
-    push t
-  
-  case "catch"
-    peek
-    if "$R" == "t"
-      printf "${indent}_shsh_brk_$try_depth=1; done\n${indent}if [ \"\$_shsh_err_$try_depth\" -ne 0 ]; then error=\$_shsh_err_$try_depth\n"
-      pop
-      push c
-    else
-      printf '%s\n' "$line"
-    end
   
   case "switch "*
     str_after "$stripped" "switch "; expression="$R"
@@ -1699,36 +1734,6 @@ transform_line() {
       if "$statement" != "": emit_inline_statement "${indent}  " "$statement"
     else
       printf '%s\n' "$line"
-    end
-  
-  case "default"
-    peek
-    if "$R" == "s"
-      if ! switch_is_first: printf "${indent}  ;;\n"
-      switch_set_not_first
-      printf "${indent}*)\n"
-    else
-      printf '%s\n' "$line"
-    end
-  
-  case "end"
-    peek
-    if "$R" == "s"
-      printf "${indent}  ;;\n"
-      printf "${indent}esac\n"
-      switch_pop_first
-      pop
-    elif "$R" == "i"
-      printf "${indent}fi\n"
-      pop
-    elif "$R" == "c"
-      printf "${indent}fi\n"
-      try_depth_dec
-      pop
-    elif "$R" == "t"
-      printf "${indent}_shsh_brk_$try_depth=1; done\n"
-      try_depth_dec
-      pop
     end
   
   case *"++"
