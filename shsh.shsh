@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.45.0"
+VERSION="0.46.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1383,9 +1383,26 @@ emit_single_condition() {
   _esc_cond="$1"
   if is_comparison "$_esc_cond"
     parse_comparison "$_esc_cond"
+    strip_outer_quotes "$_ec_right"; _esc_right_unquoted="$R"
+    strip_outer_quotes "$_ec_left"; _esc_left_unquoted="$R"
+    if "$_esc_right_unquoted" == ""
+      if is_simple_var "$_esc_left_unquoted"
+        if "$_ec_shell_op" == "="
+          R="[ -z \"${_esc_left_unquoted}\" ]"
+          return
+        elif "$_ec_shell_op" == "!="
+          R="[ -n \"${_esc_left_unquoted}\" ]"
+          return
+        end
+      end
+    end
     format_test_operand "$_ec_left"; _emit_left="$R"
     format_test_operand "$_ec_right"; _emit_right="$R"
     R="[ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]"
+  elif str_starts "$_esc_cond" "nonempty "
+    str_after "$_esc_cond" "nonempty "; _esc_target="$R"
+    format_test_operand "$_esc_target"; _emit_target="$R"
+    R="[ -n ${_emit_target} ]"
   elif is_simple_var "$_esc_cond"
     R="[ -n \"${_esc_cond}\" ]"
   elif str_starts "$_esc_cond" "! "
@@ -1446,14 +1463,6 @@ emit_condition() {
   else
     emit_single_condition "$condition"
     printf '%s\n' "${indent}${keyword} ${R}${suffix}"
-  end
-}
-
-nonempty() {
-  if "$1" == ""
-    return 1
-  else
-    return 0
   end
 }
 
@@ -1529,6 +1538,9 @@ transform_line() {
   
   case ""
     printf '\n'
+
+  case "#"*
+    printf '%s\n' "$line"
   
   case "end"
     peek

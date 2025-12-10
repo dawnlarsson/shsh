@@ -5,14 +5,14 @@
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-if [ "$_SHSH_DASH" = "" ]; then
+if [ -z "$_SHSH_DASH" ]; then
   if command -v dash >/dev/null 2>&1; then
     export _SHSH_DASH=1
     exec dash "$0" "$@"
   fi
 fi
 
-VERSION="0.45.0"
+VERSION="0.46.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -529,13 +529,13 @@ file_hash() {
   return 1
 }
 
-if [ "$_shsh_tmp_counter" = "" ]; then
+if [ -z "$_shsh_tmp_counter" ]; then
   _shsh_tmp_counter=0
 fi
 
 tmp_file() {
   base="$TMPDIR"
-  if [ "$base" = "" ]; then
+  if [ -z "$base" ]; then
     base="/tmp"
   fi
 
@@ -554,7 +554,7 @@ tmp_file() {
 
 tmp_dir() {
   base="$TMPDIR"
-  if [ "$base" = "" ]; then
+  if [ -z "$base" ]; then
     base="/tmp"
   fi
 
@@ -1583,9 +1583,26 @@ emit_single_condition() {
   _esc_cond="$1"
   if is_comparison "$_esc_cond"; then
     parse_comparison "$_esc_cond"
+    strip_outer_quotes "$_ec_right"; _esc_right_unquoted="$R"
+    strip_outer_quotes "$_ec_left"; _esc_left_unquoted="$R"
+    if [ -z "$_esc_right_unquoted" ]; then
+      if is_simple_var "$_esc_left_unquoted"; then
+        if [ "$_ec_shell_op" = "=" ]; then
+          R="[ -z \"${_esc_left_unquoted}\" ]"
+          return
+        elif [ "$_ec_shell_op" = "!=" ]; then
+          R="[ -n \"${_esc_left_unquoted}\" ]"
+          return
+        fi
+      fi
+    fi
     format_test_operand "$_ec_left"; _emit_left="$R"
     format_test_operand "$_ec_right"; _emit_right="$R"
     R="[ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]"
+  elif str_starts "$_esc_cond" "nonempty "; then
+    str_after "$_esc_cond" "nonempty "; _esc_target="$R"
+    format_test_operand "$_esc_target"; _emit_target="$R"
+    R="[ -n ${_emit_target} ]"
   elif is_simple_var "$_esc_cond"; then
     R="[ -n \"${_esc_cond}\" ]"
   elif str_starts "$_esc_cond" "! "; then
@@ -1649,18 +1666,10 @@ emit_condition() {
   fi
 }
 
-nonempty() {
-  if [ "$1" = "" ]; then
-    return 1
-  else
-    return 0
-  fi
-}
-
 emit_inline_statement() {
   inline_indent="$1"
   inline_statement="$2"
-  if [ "$inline_statement" = "" ]; then
+  if [ -z "$inline_statement" ]; then
     return
   fi
 
@@ -1739,6 +1748,10 @@ transform_line() {
 
   "")
     printf '\n'
+
+    ;;
+  "#"*)
+    printf '%s\n' "$line"
 
     ;;
   "end")
@@ -1928,11 +1941,11 @@ transform_line() {
 
         is_single_line=0
         if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
-          if [ "$maybe_statement" != "" ]; then
+          if [ -n "$maybe_statement" ]; then
             is_single_line=1
           fi
         else
-          if [ "$maybe_statement" != "" ]; then
+          if [ -n "$maybe_statement" ]; then
             is_single_line=1
           fi
         fi
@@ -1969,7 +1982,7 @@ transform_line() {
       str_after "$stripped" "default:"; statement="$R"
       R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
       printf "${indent}*)\n"
-      if [ "$statement" != "" ]; then
+      if [ -n "$statement" ]; then
         emit_inline_statement "${indent}  " "$statement"
       fi
     else
@@ -2117,7 +2130,7 @@ transform() {
   test_block_name=""
   _has_tests=0
 
-  while IFS= read -r current_line || nonempty "$current_line"; do
+  while IFS= read -r current_line || [ -n "$current_line" ]; do
     transform_line "$current_line"
   done
 
@@ -2138,7 +2151,7 @@ run_file() {
 emit_runtime_stripped() {
   _ers_source="$1"
   _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
-  while IFS= read -r _ers_line || nonempty "$_ers_line"; do
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
     if str_starts "$_ers_line" "# __RUNTIME_START__"; then
       _ers_in_rt=1; continue
     fi
@@ -2169,7 +2182,7 @@ emit_runtime_stripped() {
       _ers_cur_fn=""
       ;;
     *)
-      if [ "$_ers_cur_fn" != "" ]; then
+      if [ -n "$_ers_cur_fn" ]; then
         _ers_cur_body="$_ers_cur_body $_ers_line"
       fi
       ;;
@@ -2210,7 +2223,7 @@ emit_runtime_stripped() {
   done
 
   _ers_emit=0 _ers_skip=0 _ers_in_func=0
-  while IFS= read -r _ers_line || nonempty "$_ers_line"; do
+  while IFS= read -r _ers_line || [ -n "$_ers_line" ]; do
     case $_ers_emit in
     0)
       if str_starts "$_ers_line" "# __RUNTIME_START__"; then
@@ -2301,7 +2314,7 @@ _rt_need_fn() {
 
 emit_runtime() {
   _er_emit=0
-  while IFS= read -r _er_line || nonempty "$_er_line"; do
+  while IFS= read -r _er_line || [ -n "$_er_line" ]; do
     case $_er_emit in
     0)
       if str_starts "$_er_line" "# __RUNTIME_START__"; then
@@ -2340,7 +2353,7 @@ info() {
 
 case $1 in
   raw)
-    if [ "$2" = "" ]; then
+    if [ -z "$2" ]; then
       transform
     elif [ "$2" = "-" ]; then
       transform
@@ -2351,7 +2364,7 @@ case $1 in
   build)
     printf '#!/bin/sh\n'
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
-    if [ "$2" = "" ]; then
+    if [ -z "$2" ]; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
       printf "$_es_code\n"
@@ -2365,7 +2378,7 @@ case $1 in
     printf '#!/bin/sh\n'
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     emit_runtime
-    if [ "$2" = "" ]; then
+    if [ -z "$2" ]; then
       transform
     else
       transform < "$2"
@@ -2401,7 +2414,7 @@ case $1 in
       esac
     done
 
-    if [ "$_install_dest" = "" ]; then
+    if [ -z "$_install_dest" ]; then
       mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
       _install_dest="$HOME/.local/bin/shsh"
       _install_needs_path=1
@@ -2499,7 +2512,7 @@ case $1 in
       fi
     done
 
-    if [ "$_dest" = "" ]; then
+    if [ -z "$_dest" ]; then
       for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
         case ":$PATH:" in
           *":$_try_dir:"*)
@@ -2512,7 +2525,7 @@ case $1 in
         esac
       done
 
-      if [ "$_dest" = "" ]; then
+      if [ -z "$_dest" ]; then
         mkdir -p "$HOME/.local/bin"
         _dest="$HOME/.local/bin/shsh"
       fi
@@ -2566,7 +2579,7 @@ case $1 in
     else
       R=""
       eval "$(printf '%s\n' "$*" | transform)"
-      if [ "$R" != "" ]; then
+      if [ -n "$R" ]; then
         printf '%s\n' "$R"
       fi
     fi
