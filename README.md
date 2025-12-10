@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 598 tests.
+Passing 608 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 

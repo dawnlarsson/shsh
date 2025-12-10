@@ -1,10 +1,18 @@
+#!/bin/sh
 #
 # Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 # 
 # Apache-2.0 License - Dawn Larsson
 # https://github.com/dawnlarsson/shsh
 
-VERSION="0.43.0"
+if [ "$_SHSH_DASH" = "" ]; then
+  if command -v dash >/dev/null 2>&1; then
+    export _SHSH_DASH=1
+    exec dash "$0" "$@"
+  fi
+fi
+
+VERSION="0.44.0"
 
 # __RUNTIME_START__
 _shsh_sq=$(printf "\047")
@@ -406,25 +414,27 @@ bit_32() {
     
     _b1=$(( (_v0 >> 24) & 0xff )); _b2=$(( (_v0 >> 16) & 0xff ))
     _b3=$(( (_v0 >> 8) & 0xff )); _b4=$(( _v0 & 0xff ))
-    _o0="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o0_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o0_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
 
     _b1=$(( (_v1 >> 24) & 0xff )); _b2=$(( (_v1 >> 16) & 0xff ))
     _b3=$(( (_v1 >> 8) & 0xff )); _b4=$(( _v1 & 0xff ))
-    _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o1_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o1_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
 
     _b1=$(( (_v2 >> 24) & 0xff )); _b2=$(( (_v2 >> 16) & 0xff ))
     _b3=$(( (_v2 >> 8) & 0xff )); _b4=$(( _v2 & 0xff ))
-    _o2="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o2_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o2_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
 
     _b1=$(( (_v3 >> 24) & 0xff )); _b2=$(( (_v3 >> 16) & 0xff ))
     _b3=$(( (_v3 >> 8) & 0xff )); _b4=$(( _v3 & 0xff ))
-    _o3="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o3_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o3_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
 
     case "$ENDIAN" in
-      big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o0$_o1$_o2$_o3" ;;
-      *)
-         _b32_buf="$_b32_buf$_o0$_o1$_o2$_o3" 
-         ;;
+      big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o0_be$_o1_be$_o2_be$_o3_be" ;;
+      *)                   _b32_buf="$_b32_buf$_o0_le$_o1_le$_o2_le$_o3_le" ;;
     esac
     shift 4
   done
@@ -474,11 +484,13 @@ bit_128() {
     _b128_s="${_b128_arg%,}"
     case "$_b128_s" in 0x*|0X*) _b128_s="${_b128_s#??}";; esac
     while [ ${#_b128_s} -lt 32 ]; do _b128_s="0$_b128_s"; done
-    _b128_hi="0x$(printf "%.16s" "$_b128_s")"
-    _b128_lo="0x${_b128_s#????????????????}"
+    _b128_a="0x$(printf "%.8s" "$_b128_s")"
+    _b128_b="0x$(printf "%.8s" "${_b128_s#????????}")"
+    _b128_c="0x$(printf "%.8s" "${_b128_s#????????????????}")"
+    _b128_d="0x${_b128_s#????????????????????????}"
     case "$ENDIAN" in
-      big|Big|BIG|BE|be|1) bit_64 "$_b128_hi"; bit_64 "$_b128_lo" ;;
-      *)                   bit_64 "$_b128_lo"; bit_64 "$_b128_hi" ;;
+      big|Big|BIG|BE|be|1) bit_32 "$_b128_a" "$_b128_b" "$_b128_c" "$_b128_d" ;;
+      *)                   bit_32 "$_b128_d" "$_b128_c" "$_b128_b" "$_b128_a" ;;
     esac
   done
 }
@@ -718,7 +730,7 @@ current_try_depth() {
 
 transform_statement() {
   _ts_stmt="$1"
-  str_ltrim "$_ts_stmt"; _ts_stmt="$R"
+  R="${_ts_stmt#"${_ts_stmt%%[![:space:]]*}"}"; _ts_stmt="$R"
   case $_ts_stmt in
   *"++")
     str_before "$_ts_stmt" "++"; _ts_var="$R"
@@ -1421,8 +1433,8 @@ transform_semicolon_parts() {
 }
 
 emit_with_try_check() {
-  str_indent "$1"; _ewtc_indent="$R"
-  str_ltrim "$1"; _ewtc_stmt="$R"
+  R="${1%%[![:space:]]*}"; _ewtc_indent="$R"
+  R="${1#"${1%%[![:space:]]*}"}"; _ewtc_stmt="$R"
   transform_semicolon_parts "$_ewtc_stmt"
   _ewtc_transformed="${_ewtc_indent}$R"
   if in_try_block; then
@@ -1649,14 +1661,14 @@ emit_inline_statement() {
     return
   fi
 
-  str_ltrim "$inline_statement"; inline_statement="$R"
+  R="${inline_statement#"${inline_statement%%[![:space:]]*}"}"; inline_statement="$R"
 
   if str_starts "$inline_statement" "if "; then
     str_after "$inline_statement" "if "; inline_rest="$R"
     if str_contains "$inline_rest" "$COLON_SPACE"; then
       str_before "$inline_rest" "$COLON_SPACE"; inline_condition="$R"
       str_after "$inline_rest" "$COLON_SPACE"; inline_body="$R"
-      str_ltrim "$inline_body"; inline_body="$R"
+      R="${inline_body#"${inline_body%%[![:space:]]*}"}"; inline_body="$R"
       emit_condition "if" "$inline_condition" "$inline_indent" "$SEMICOLON_THEN"
       emit_with_try_check "${inline_indent}  ${inline_body}"
       single_line_if_active=1
@@ -1668,7 +1680,7 @@ emit_inline_statement() {
     if str_contains "$inline_rest" "$COLON_SPACE"; then
       str_before "$inline_rest" "$COLON_SPACE"; inline_condition="$R"
       str_after "$inline_rest" "$COLON_SPACE"; inline_body="$R"
-      str_ltrim "$inline_body"; inline_body="$R"
+      R="${inline_body#"${inline_body%%[![:space:]]*}"}"; inline_body="$R"
       emit_condition "while" "$inline_condition" "$inline_indent" "$SEMICOLON_DO"
       emit_with_try_check "${inline_indent}  ${inline_body}"
       printf "${inline_indent}done\n"
@@ -1685,8 +1697,8 @@ emit_inline_statement() {
 
 transform_line() {
   line="$1"
-  str_ltrim "$line"; stripped="$R"
-  str_indent "$line"; indent="$R"
+  R="${line#"${line%%[![:space:]]*}"}"; stripped="$R"
+  R="${line%%[![:space:]]*}"; indent="$R"
   
   if [ "$single_line_if_active" = "1" ]; then
     continues_single_line=0
@@ -1756,7 +1768,7 @@ transform_line() {
     ;;
   "else:"*)
     str_after "$stripped" "else:"; statement="$R"
-    str_ltrim "$statement"; statement="$R"
+    R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
     printf "${indent}else\n"
     emit_with_try_check "${indent}  ${statement}"
     if [ "$single_line_if_active" = "1" ]; then
@@ -1871,7 +1883,7 @@ transform_line() {
       if str_contains "$rest" "$COLON_SPACE"; then
         str_before "$rest" "$COLON_SPACE"; maybe_pattern="$R"
         str_after "$rest" "$COLON_SPACE"; maybe_statement="$R"
-        str_ltrim "$maybe_statement"; maybe_statement="$R"
+        R="${maybe_statement#"${maybe_statement%%[![:space:]]*}"}"; maybe_statement="$R"
         
         is_single_line=0
         if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
@@ -1889,14 +1901,14 @@ transform_line() {
           emit_inline_statement "${indent}  " "$maybe_statement"
         else
           if str_ends "$rest" ":"; then
-            str_before_last "$rest" ":"
+            R="${rest%":"*}"; [ "$R" != "$rest" ]
             rest="$R"
           fi
           printf '%s\n' "${indent}${rest})"
         fi
       else
         if str_ends "$rest" ":"; then
-          str_before_last "$rest" ":"
+          R="${rest%":"*}"; [ "$R" != "$rest" ]
           rest="$R"
         fi
         printf '%s\n' "${indent}${rest})"
@@ -1914,7 +1926,7 @@ transform_line() {
       fi
       switch_set_not_first
       str_after "$stripped" "default:"; statement="$R"
-      str_ltrim "$statement"; statement="$R"
+      R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
       printf "${indent}*)\n"
       if [ "$statement" != "" ]; then
         emit_inline_statement "${indent}  " "$statement"
@@ -2132,7 +2144,7 @@ emit_runtime_stripped() {
     case "$_ers_line" in
     *"() {"*"}")
       str_before "$_ers_line" "()"; _ers_cur_fn="$R"
-      str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
+      R="${_ers_cur_fn#"${_ers_cur_fn%%[![:space:]]*}"}"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
       str_after "$_ers_line" "() { "; _ers_cur_body="$R"
       str_before "$_ers_cur_body" " }"; _ers_cur_body="$R"
@@ -2141,7 +2153,7 @@ emit_runtime_stripped() {
       ;;
     *"() {"*)
       str_before "$_ers_line" "()"; _ers_cur_fn="$R"
-      str_ltrim "$_ers_cur_fn"; _ers_cur_fn="$R"
+      R="${_ers_cur_fn#"${_ers_cur_fn%%[![:space:]]*}"}"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
       _ers_cur_body=""
       ;;
@@ -2205,7 +2217,7 @@ emit_runtime_stripped() {
         case "$_ers_line" in
         *"() {"*"}")
           str_before "$_ers_line" "()"; _ers_fn="$R"
-          str_ltrim "$_ers_fn"; _ers_fn="$R"
+          R="${_ers_fn#"${_ers_fn%%[![:space:]]*}"}"; _ers_fn="$R"
           case "$_rt_needed" in
           *" $_ers_fn "*)
             printf '%s\n' "$_ers_line"
@@ -2214,7 +2226,7 @@ emit_runtime_stripped() {
           ;;
         *"() {"*)
           str_before "$_ers_line" "()"; _ers_fn="$R"
-          str_ltrim "$_ers_fn"; _ers_fn="$R"
+          R="${_ers_fn#"${_ers_fn%%[![:space:]]*}"}"; _ers_fn="$R"
           case "$_rt_needed" in
           *" $_ers_fn "*)
             _ers_skip=0
@@ -2314,6 +2326,9 @@ info() {
     printf "  uninstall              remove from system\n"
     printf "  update                 update from github (sudo)\n"
     printf "  version                show version\n"
+    if [ "$_SHSH_FAST" = "0" ]; then
+      printf "\n\033[1;33mWarning:\033[0m Install dash for 2-4x speedup (shsh will automatically use dash)\n"
+    fi
 }
 
 case $1 in
@@ -2327,6 +2342,8 @@ case $1 in
     fi
     ;;
   build)
+    printf '#!/bin/sh\n'
+    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     if [ "$2" = "" ]; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
@@ -2338,6 +2355,8 @@ case $1 in
     fi
     ;;
   build_full)
+    printf '#!/bin/sh\n'
+    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     emit_runtime
     if [ "$2" = "" ]; then
       transform

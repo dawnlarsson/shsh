@@ -1378,6 +1378,56 @@ test "bit_128 zero pad" {
   test_equals "$got" "ff000000000000000000000000000000"
 }
 
+test "bit_128 high bit set LE" {
+  got=$(hex_capture 'bit_128 0xffffffffffffffffffffffffffffffff')
+  test_equals "$got" "ffffffffffffffffffffffffffffffff"
+}
+
+test "bit_128 high bit set BE" {
+  got=$(hex_capture 'ENDIAN=big bit_128 0xffffffffffffffffffffffffffffffff')
+  test_equals "$got" "ffffffffffffffffffffffffffffffff"
+}
+
+test "bit_128 alternating LE" {
+  got=$(hex_capture 'bit_128 0xaa55aa55aa55aa55aa55aa55aa55aa55')
+  test_equals "$got" "55aa55aa55aa55aa55aa55aa55aa55aa"
+}
+
+test "bit_128 alternating BE" {
+  got=$(hex_capture 'ENDIAN=big bit_128 0xaa55aa55aa55aa55aa55aa55aa55aa55')
+  test_equals "$got" "aa55aa55aa55aa55aa55aa55aa55aa55"
+}
+
+test "bit_32 four args LE" {
+  got=$(hex_capture 'bit_32 0x11223344 0x55667788 0x99aabbcc 0xddeeff00')
+  test_equals "$got" "4433221188776655ccbbaa9900ffeedd"
+}
+
+test "bit_32 four args BE" {
+  got=$(hex_capture 'ENDIAN=big bit_32 0x11223344 0x55667788 0x99aabbcc 0xddeeff00')
+  test_equals "$got" "112233445566778899aabbccddeeff00"
+}
+
+test "bit_32 five args LE" {
+  got=$(hex_capture 'bit_32 0x11223344 0x55667788 0x99aabbcc 0xddeeff00 0xaabbccdd')
+  test_equals "$got" "4433221188776655ccbbaa9900ffeeddddccbbaa"
+}
+
+test "bit_32 eight args LE" {
+  got=$(hex_capture 'bit_32 0x01020304 0x05060708 0x090a0b0c 0x0d0e0f10 0x11121314 0x15161718 0x191a1b1c 0x1d1e1f20')
+  test_equals "$got" "04030201080706050c0b0a09100f0e0d14131211181716151c1b1a19201f1e1d"
+}
+
+test "bit_32 high bit set LE" {
+  got=$(hex_capture 'bit_32 0xffffffff 0x80000000 0x80000001 0xfffffffe')
+  test_equals "$got" "ffffffff0000008001000080feffffff"
+}
+
+test "bit_128 zero" {
+  got=$(hex_capture 'bit_128 0x0')
+  test_equals "$got" "00000000000000000000000000000000"
+}
+
 echo
 echo "=== Edge Cases ==="
 
@@ -5038,8 +5088,13 @@ x=1
 echo $x
 SHSH
 )
-  test_equals "$_ts_pure" 'x=1
-echo $x'
+  # Build expected output - must use printf to avoid shsh parsing the shell code
+  _ts_line1='#!/bin/sh'
+  _ts_line2='if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi'
+  _ts_line3='x=1'
+  _ts_line4='echo $x'
+  _ts_expected=$(printf '%s\n%s\n%s\n%s' "$_ts_line1" "$_ts_line2" "$_ts_line3" "$_ts_line4")
+  test_equals "$_ts_pure" "$_ts_expected"
 }
 
 test "tree shake: includes str_before" {
@@ -5334,7 +5389,8 @@ str_before "a:b" ":"
 echo $R
 SHSH
 )
-  _ts_topif_lines=$(printf '%s\n' "$_ts_topif" | grep -c "^if \[" || true)
+  # Skip the dash auto-switch line, count only other top-level ifs
+  _ts_topif_lines=$(printf '%s\n' "$_ts_topif" | grep -v '_SHSH_DASH' | grep -c "^if \[" || true)
   test_equals "$_ts_topif_lines" "0"
 }
 

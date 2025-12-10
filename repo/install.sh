@@ -121,3 +121,7 @@ else
 fi
 
 printf "\nRun 'shsh' to get started.\n"
+
+if ! command -v dash >/dev/null 2>&1; then
+  printf "\n\033[1;33mWarning:\033[0m Install dash for 2-4x speedup (shsh will automatically use dash)\n"
+fi
