@@ -12,7 +12,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.47.0"
+VERSION="0.48.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -704,12 +704,7 @@ SEMICOLON_DO="$SEMICOLON_DO do"
 push() { block_stack="$block_stack$1"; }
 pop()  { block_stack="${block_stack%?}"; }
 peek() { R="${block_stack#"${block_stack%?}"}"; }
-
-switch_first_case_stack=""
-switch_push_first() { switch_first_case_stack="${switch_first_case_stack}1"; }
-switch_pop_first()  { switch_first_case_stack="${switch_first_case_stack%?}"; }
-switch_is_first()   { str_ends "$switch_first_case_stack" "1"; }
-switch_set_not_first() { switch_first_case_stack="${switch_first_case_stack%?}0"; }
+switch_mark_used() { block_stack="${block_stack%?}S"; }
 
 try_depth=0
 try_depth_inc() { try_depth=$((try_depth + 1)); }
@@ -733,108 +728,82 @@ current_try_depth() {
   R=$_ctd_n
 }
 
+_transform_arith() {
+  _ta_stmt="$1"
+
+  if str_ends "$_ta_stmt" "++"; then
+    str_before "$_ta_stmt" "++"; _ta_var="$R"
+    case $_ta_var in
+    ""|*[!a-zA-Z0-9_]*)
+      return 1
+      ;;
+    esac
+    R="${_ta_var}=\$((${_ta_var} + 1))"
+    return 0
+  fi
+
+  if str_ends "$_ta_stmt" "--"; then
+    str_before "$_ta_stmt" "--"; _ta_var="$R"
+    case $_ta_var in
+    ""|*[!a-zA-Z0-9_]*)
+      return 1
+      ;;
+    esac
+    R="${_ta_var}=\$((${_ta_var} - 1))"
+    return 0
+  fi
+
+  _ta_op="" _ta_shell_op=""
+  if str_contains "$_ta_stmt" " += "; then
+    _ta_op=" += "; _ta_shell_op="+"
+  elif str_contains "$_ta_stmt" " -= "; then
+    _ta_op=" -= "; _ta_shell_op="-"
+  elif str_contains "$_ta_stmt" " *= "; then
+    _ta_op=" *= "; _ta_shell_op="*"
+  elif str_contains "$_ta_stmt" " /= "; then
+    _ta_op=" /= "; _ta_shell_op="/"
+  elif str_contains "$_ta_stmt" " %= "; then
+    _ta_op=" %= "; _ta_shell_op="%"
+  else
+    return 1
+  fi
+
+  str_before "$_ta_stmt" "$_ta_op"; _ta_var="$R"
+  case $_ta_var in
+  ""|*[!a-zA-Z0-9_]*)
+    return 1
+    ;;
+  esac
+  str_after "$_ta_stmt" "$_ta_op"; _ta_val="$R"
+  R="${_ta_var}=\$((${_ta_var} ${_ta_shell_op} ${_ta_val}))"
+  return 0
+}
+
 transform_statement() {
   _ts_stmt="$1"
   R="${_ts_stmt#"${_ts_stmt%%[![:space:]]*}"}"; _ts_stmt="$R"
+
+  if _transform_arith "$_ts_stmt"; then
+    return
+  fi
+
   case $_ts_stmt in
-  *"++")
-    str_before "$_ts_stmt" "++"; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        R="${_ts_var}=\$((${_ts_var} + 1))"
-      ;;
-    esac
-    ;;
-  *"--")
-    str_before "$_ts_stmt" "--"; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        R="${_ts_var}=\$((${_ts_var} - 1))"
-      ;;
-    esac
-    ;;
-  *" += "*)
-    str_before "$_ts_stmt" " += "; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        str_after "$_ts_stmt" " += "; _ts_val="$R"
-        R="${_ts_var}=\$((${_ts_var} + ${_ts_val}))"
-      ;;
-    esac
-    ;;
-  *" -= "*)
-    str_before "$_ts_stmt" " -= "; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        str_after "$_ts_stmt" " -= "; _ts_val="$R"
-        R="${_ts_var}=\$((${_ts_var} - ${_ts_val}))"
-      ;;
-    esac
-    ;;
-  *" *= "*)
-    str_before "$_ts_stmt" " *= "; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        str_after "$_ts_stmt" " *= "; _ts_val="$R"
-        R="${_ts_var}=\$((${_ts_var} * ${_ts_val}))"
-      ;;
-    esac
-    ;;
-  *" /= "*)
-    str_before "$_ts_stmt" " /= "; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        str_after "$_ts_stmt" " /= "; _ts_val="$R"
-        R="${_ts_var}=\$((${_ts_var} / ${_ts_val}))"
-      ;;
-    esac
-    ;;
-  *" %= "*)
-    str_before "$_ts_stmt" " %= "; _ts_var="$R"
-    case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
-        R="$_ts_stmt"
-        ;;
-      *)
-        str_after "$_ts_stmt" " %= "; _ts_val="$R"
-        R="${_ts_var}=\$((${_ts_var} % ${_ts_val}))"
-      ;;
-    esac
-    ;;
   *" = "*)
     str_before "$_ts_stmt" " = "; _ts_var="$R"
     case $_ts_var in
-      *[!a-zA-Z0-9_]*|"")
+    *[!a-zA-Z0-9_]*|"")
+      R="$_ts_stmt"
+      ;;
+    *)
+      str_after "$_ts_stmt" " = "; _ts_call="$R"
+      case $_ts_call in
+      '"'*|"'"*|'$'*|""|*'='*)
         R="$_ts_stmt"
         ;;
       *)
-        str_after "$_ts_stmt" " = "; _ts_call="$R"
-        case $_ts_call in
-        '"'*|"'"*|'$'*|""|*'='*)
-          R="$_ts_stmt"
-          ;;
-        *)
-          R="${_ts_call}; ${_ts_var}=\"\$R\""
-          ;;
-        esac
+        R="${_ts_call}; ${_ts_var}=\"\$R\""
+        ;;
+      esac
       ;;
     esac
     ;;
@@ -1437,6 +1406,31 @@ transform_semicolon_parts() {
   R="$_tsp_out"
 }
 
+_parse_colon_syntax() {
+  _pcs_rest="$1"
+
+  if ! str_contains "$_pcs_rest" "$COLON_SPACE"; then
+    return 1
+  fi
+
+  str_after "$_pcs_rest" "$COLON_SPACE"; _pcs_after="$R"
+  if str_starts "$_pcs_after" '"' || str_starts "$_pcs_after" "'"; then
+    return 1
+  fi
+
+  str_before "$_pcs_rest" "$COLON_SPACE"; _pcs_cond="$R"
+  str_after "$_pcs_rest" "$COLON_SPACE"; _pcs_body="$R"
+  return 0
+}
+
+_strip_inline_end() {
+  _has_inline_end=0
+  if str_ends "$_pcs_body" "; end"; then
+    str_before_last "$_pcs_body" "; end"; _pcs_body="$R"
+    _has_inline_end=1
+  fi
+}
+
 emit_with_try_check() {
   R="${1%%[![:space:]]*}"; _ewtc_indent="$R"
   R="${1#"${1%%[![:space:]]*}"}"; _ewtc_stmt="$R"
@@ -1761,10 +1755,9 @@ transform_line() {
     ;;
   "end")
     peek
-    if [ "$R" = "s" ]; then
+    if [ "$R" = "s" ] || [ "$R" = "S" ]; then
       printf "${indent}  ;;\n"
       printf "${indent}esac\n"
-      switch_pop_first
       pop
     elif [ "$R" = "i" ]; then
       printf "${indent}fi\n"
@@ -1803,12 +1796,12 @@ transform_line() {
 
     ;;
   "default")
-    peek
-    if [ "$R" = "s" ]; then
-      if ! switch_is_first; then
+    peek; _peek="$R"
+    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
+      if [ "$_peek" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
-      switch_set_not_first
+      switch_mark_used
       printf "${indent}*)\n"
     else
       printf '%s\n' "$line"
@@ -1834,24 +1827,11 @@ transform_line() {
     ;;
   "if "*)
     str_after "$stripped" "if "; rest="$R"
-    _if_colon_in_quotes=0
-    if str_contains "$rest" "$COLON_SPACE"; then
-      str_after "$rest" "$COLON_SPACE"; _if_stmt="$R"
-      if str_starts "$_if_stmt" '"' || str_starts "$_if_stmt" "'"; then
-        _if_colon_in_quotes=1
-      fi
-    fi
-    if str_contains "$rest" "$COLON_SPACE" && [ "$_if_colon_in_quotes" = 0 ]; then
-      str_before "$rest" "$COLON_SPACE"; condition="$R"
-      str_after "$rest" "$COLON_SPACE"; statement="$R"
-      _if_has_end=0
-      if str_ends "$statement" "; end"; then
-        str_before_last "$statement" "; end"; statement="$R"
-        _if_has_end=1
-      fi
-      emit_condition "if" "$condition" "$indent" "$SEMICOLON_THEN"
-      emit_with_try_check "${indent}  ${statement}"
-      if [ "$_if_has_end" = 1 ]; then
+    if _parse_colon_syntax "$rest"; then
+      _strip_inline_end
+      emit_condition "if" "$_pcs_cond" "$indent" "$SEMICOLON_THEN"
+      emit_with_try_check "${indent}  ${_pcs_body}"
+      if [ "$_has_inline_end" = 1 ]; then
         printf '%s\n' "${indent}fi"
       else
         single_line_if_active=1
@@ -1868,11 +1848,9 @@ transform_line() {
     ;;
   "elif "*)
     str_after "$stripped" "elif "; rest="$R"
-    if str_contains "$rest" "$COLON_SPACE"; then
-      str_before "$rest" "$COLON_SPACE"; condition="$R"
-      str_after "$rest" "$COLON_SPACE"; statement="$R"
-      emit_condition "elif" "$condition" "$indent" "$SEMICOLON_THEN"
-      emit_with_try_check "${indent}  ${statement}"
+    if _parse_colon_syntax "$rest"; then
+      emit_condition "elif" "$_pcs_cond" "$indent" "$SEMICOLON_THEN"
+      emit_with_try_check "${indent}  ${_pcs_body}"
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
       printf '%s\n' "$line"
     else
@@ -1892,22 +1870,11 @@ transform_line() {
 
     ;;
   "while "*)
-    str_after "$stripped" "while "; expression="$R"
-    _while_colon_in_quotes=0
-    if str_contains "$expression" "$COLON_SPACE"; then
-      str_after "$expression" "$COLON_SPACE"; _while_stmt="$R"
-      if str_starts "$_while_stmt" '"' || str_starts "$_while_stmt" "'"; then
-        _while_colon_in_quotes=1
-      fi
-    fi
-    if str_contains "$expression" "$COLON_SPACE" && [ "$_while_colon_in_quotes" = 0 ]; then
-      str_before "$expression" "$COLON_SPACE"; condition="$R"
-      str_after "$expression" "$COLON_SPACE"; statement="$R"
-      if str_ends "$statement" "; end"; then
-        str_before_last "$statement" "; end"; statement="$R"
-      fi
-      emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
-      emit_with_try_check "${indent}  ${statement}"
+    str_after "$stripped" "while "; rest="$R"
+    if _parse_colon_syntax "$rest"; then
+      _strip_inline_end
+      emit_condition "while" "$_pcs_cond" "$indent" "$SEMICOLON_DO"
+      emit_with_try_check "${indent}  ${_pcs_body}"
       printf "${indent}done\n"
       if in_try_block; then
         current_try_depth
@@ -1916,7 +1883,7 @@ transform_line() {
     elif str_contains "$stripped" "$SEMICOLON_DO"; then
       printf '%s\n' "$line"
     else
-      emit_condition "while" "$expression" "$indent" "$SEMICOLON_DO"
+      emit_condition "while" "$rest" "$indent" "$SEMICOLON_DO"
     fi
 
     ;;
@@ -1931,7 +1898,6 @@ transform_line() {
   "test "*" {"*)
     str_after "$stripped" "test "; _test_rest="$R"
     str_before "$_test_rest" " {"; _test_name="$R"
-    # Remove quotes from test name
     case $_test_name in
     '"'*'"')
       _test_name="${_test_name#\"}"
@@ -1952,18 +1918,17 @@ transform_line() {
     str_after "$stripped" "switch "; expression="$R"
     printf "${indent}case $expression in\n"
     push s
-    switch_push_first
 
     ;;
   "case "*)
-    peek
-    if [ "$R" = "s" ]; then
+    peek; _peek="$R"
+    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
       str_after "$stripped" "case "; rest="$R"
 
-      if ! switch_is_first; then
+      if [ "$_peek" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
-      switch_set_not_first
+      switch_mark_used
 
       if str_contains "$rest" "$COLON_SPACE"; then
         str_before "$rest" "$COLON_SPACE"; maybe_pattern="$R"
@@ -2004,12 +1969,12 @@ transform_line() {
 
     ;;
   "default:"*)
-    peek
-    if [ "$R" = "s" ]; then
-      if ! switch_is_first; then
+    peek; _peek="$R"
+    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
+      if [ "$_peek" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
-      switch_set_not_first
+      switch_mark_used
       str_after "$stripped" "default:"; statement="$R"
       R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
       printf "${indent}*)\n"
@@ -2021,128 +1986,9 @@ transform_line() {
     fi
 
     ;;
-  *"++")
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" "++"; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          printf '%s\n' "${indent}${variable}=\$((${variable} + 1))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *"--")
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" "--"; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          printf '%s\n' "${indent}${variable}=\$((${variable} - 1))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *" += "*)
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" " += "; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          str_after "$stripped" " += "; value="$R"
-          printf '%s\n' "${indent}${variable}=\$((${variable} + ${value}))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *" -= "*)
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" " -= "; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          str_after "$stripped" " -= "; value="$R"
-          printf '%s\n' "${indent}${variable}=\$((${variable} - ${value}))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *" *= "*)
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" " *= "; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          str_after "$stripped" " *= "; value="$R"
-          printf '%s\n' "${indent}${variable}=\$((${variable} * ${value}))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *" /= "*)
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" " /= "; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          str_after "$stripped" " /= "; value="$R"
-          printf '%s\n' "${indent}${variable}=\$((${variable} / ${value}))"
-        ;;
-      esac
-    fi
-
-    ;;
-  *" %= "*)
-    if str_contains "$stripped" "; "; then
-      transform_semicolon_parts "$stripped"
-      printf '%s\n' "${indent}$R"
-    else
-      str_before "$stripped" " %= "; variable="$R"
-      case $variable in
-        *[!a-zA-Z0-9_]*|"")
-          printf '%s\n' "$line"
-          ;;
-        *)
-          str_after "$stripped" " %= "; value="$R"
-          printf '%s\n' "${indent}${variable}=\$((${variable} % ${value}))"
-        ;;
-      esac
-    fi
+  *"++"*|*"--"*|*" += "*|*" -= "*|*" *= "*|*" /= "*|*" %= "*)
+    transform_semicolon_parts "$stripped"
+    printf '%s\n' "${indent}$R"
 
     ;;
   *)
@@ -2156,7 +2002,6 @@ transform() {
   block_stack=""
   single_line_if_active=0
   single_line_if_indent=""
-  switch_first_case_stack=""
   try_depth=0
   test_block_name=""
   _has_tests=0
