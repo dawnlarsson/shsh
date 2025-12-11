@@ -12,7 +12,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.46.0"
+VERSION="0.47.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -690,6 +690,11 @@ test_block_name=""
 
 COLON_SPACE=":"
 COLON_SPACE="$COLON_SPACE "
+
+DQ_COLON_SPACE='"'
+DQ_COLON_SPACE="$DQ_COLON_SPACE: "
+SQ_COLON_SPACE="'"
+SQ_COLON_SPACE="$SQ_COLON_SPACE: "
 
 SEMICOLON_THEN=";"
 SEMICOLON_THEN="$SEMICOLON_THEN then"
@@ -1829,13 +1834,29 @@ transform_line() {
     ;;
   "if "*)
     str_after "$stripped" "if "; rest="$R"
+    _if_colon_in_quotes=0
     if str_contains "$rest" "$COLON_SPACE"; then
+      str_after "$rest" "$COLON_SPACE"; _if_stmt="$R"
+      if str_starts "$_if_stmt" '"' || str_starts "$_if_stmt" "'"; then
+        _if_colon_in_quotes=1
+      fi
+    fi
+    if str_contains "$rest" "$COLON_SPACE" && [ "$_if_colon_in_quotes" = 0 ]; then
       str_before "$rest" "$COLON_SPACE"; condition="$R"
       str_after "$rest" "$COLON_SPACE"; statement="$R"
+      _if_has_end=0
+      if str_ends "$statement" "; end"; then
+        str_before_last "$statement" "; end"; statement="$R"
+        _if_has_end=1
+      fi
       emit_condition "if" "$condition" "$indent" "$SEMICOLON_THEN"
       emit_with_try_check "${indent}  ${statement}"
-      single_line_if_active=1
-      single_line_if_indent="$indent"
+      if [ "$_if_has_end" = 1 ]; then
+        printf '%s\n' "${indent}fi"
+      else
+        single_line_if_active=1
+        single_line_if_indent="$indent"
+      fi
     elif str_contains "$stripped" "$SEMICOLON_THEN"; then
       printf '%s\n' "$line"
       push i
@@ -1872,9 +1893,19 @@ transform_line() {
     ;;
   "while "*)
     str_after "$stripped" "while "; expression="$R"
+    _while_colon_in_quotes=0
     if str_contains "$expression" "$COLON_SPACE"; then
+      str_after "$expression" "$COLON_SPACE"; _while_stmt="$R"
+      if str_starts "$_while_stmt" '"' || str_starts "$_while_stmt" "'"; then
+        _while_colon_in_quotes=1
+      fi
+    fi
+    if str_contains "$expression" "$COLON_SPACE" && [ "$_while_colon_in_quotes" = 0 ]; then
       str_before "$expression" "$COLON_SPACE"; condition="$R"
       str_after "$expression" "$COLON_SPACE"; statement="$R"
+      if str_ends "$statement" "; end"; then
+        str_before_last "$statement" "; end"; statement="$R"
+      fi
       emit_condition "while" "$condition" "$indent" "$SEMICOLON_DO"
       emit_with_try_check "${indent}  ${statement}"
       printf "${indent}done\n"
@@ -2365,6 +2396,10 @@ case $1 in
     printf '#!/bin/sh\n'
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     if [ -z "$2" ]; then
+      _es_code="$(transform)"
+      emit_runtime_stripped "$_es_code"
+      printf "$_es_code\n"
+    elif [ "$2" = "-" ]; then
       _es_code="$(transform)"
       emit_runtime_stripped "$_es_code"
       printf "$_es_code\n"

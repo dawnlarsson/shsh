@@ -2628,6 +2628,121 @@ test "printf dash-letter works" {
   end
 }
 
+test "semicolon before while should transform" {
+  # 'i=0; while $i < 5:' should transform the while, but currently doesn't
+  _raw_out=$(printf '%s' 'i=0; while $i < 5: echo hi; i++' | "$_shsh" raw -)
+  _check_transformed='while ['
+  if str_contains "$_raw_out" "$_check_transformed"
+    test_pass  # while was transformed correctly
+  else
+    test_fail "while not transformed when preceded by semicolon"
+  end
+}
+
+test "semicolon before if should transform" {
+  # 'x=1; if $x == 1:' should transform the if, but currently doesn't
+  _raw_out=$(printf '%s' 'x=1; if $x == 1: echo yes; end' | "$_shsh" raw -)
+  _check_transformed='if ['
+  if str_contains "$_raw_out" "$_check_transformed"
+    test_pass  # if was transformed correctly
+  else
+    test_fail "if not transformed when preceded by semicolon"
+  end
+}
+
+test "semicolon before for should transform" {
+  # 'x=0; for i in 1 2 3:' should transform the for, but currently doesn't
+  _raw_out=$(printf '%s' 'x=0; for i in 1 2 3: echo $i; end' | "$_shsh" raw -)
+  # for loops should transform colon to 'do' and 'end' to 'done'
+  if str_contains "$_raw_out" "do" && str_contains "$_raw_out" "done"
+    # Also verify the colon is gone
+    if ! str_contains "$_raw_out" "3:"
+      test_pass  # for was transformed correctly
+    else
+      test_fail "for not transformed when preceded by semicolon"
+    end
+  else
+    test_fail "for not transformed when preceded by semicolon"
+  end
+}
+
+test "should read from stdin" {
+  # build - should read from stdin like raw - does
+  _build_stdin=$(printf '%s\n' 'echo hello' | "$_shsh" build - 2>&1) || true
+  if str_contains "$_build_stdin" "echo"
+    test_pass  # stdin works
+  else
+    test_fail "build - does not read stdin: $_build_stdin"
+  end
+}
+
+test "same-line end in while should be removed" {
+  # 'while $i < 5: echo hi; end' produces both 'end' AND 'done'
+  _raw_out=$(printf 'while $i < 5: echo hi; end' | "$_shsh" raw -)
+  # Should NOT contain literal 'end' word (only 'done')
+  if str_contains "$_raw_out" "; end"
+    test_fail "end not removed from same line: $_raw_out"
+  else
+    test_pass
+  end
+}
+
+test "same-line end in if should be removed" {
+  # 'if $x == 1: echo yes; end' produces both 'end' AND 'fi'
+  _raw_out=$(printf 'if $x == 1: echo yes; end' | "$_shsh" raw -)
+  # Should NOT contain literal 'end' word (only 'fi')
+  if str_contains "$_raw_out" "; end"
+    test_fail "end not removed from same line: $_raw_out"
+  else
+    test_pass
+  end
+}
+
+test "pipe before while should transform" {
+  # 'echo hi | while read line:' should transform the while
+  _raw_out=$(printf 'echo hi | while read line: echo $line; end' | "$_shsh" raw -)
+  if str_contains "$_raw_out" "do" && str_contains "$_raw_out" "done"
+    test_pass
+  else
+    test_fail "pipe before while not transformed: $_raw_out"
+  end
+}
+
+test "&& before if should transform" {
+  # 'true && if $x == 1:' should transform the if
+  _raw_out=$(printf 'true && if $x == 1: echo yes; end' | "$_shsh" raw -)
+  if str_contains "$_raw_out" "if [" && str_contains "$_raw_out" "fi"
+    test_pass
+  else
+    test_fail "&& before if not transformed: $_raw_out"
+  end
+}
+
+test "colon-space in string should not transform" {
+  # Literal ": " inside a string should NOT be treated as syntax
+  # We use a variable here because the bug affects the test file itself!
+  _colon_space=":"
+  _colon_space="$_colon_space "
+  _raw_out=$(printf '%s\n' "if str_contains \"\$x\" \"$_colon_space\"" | "$_shsh" raw -)
+  # Should pass through unchanged (or just add 'then' for if, not treat ": " as body separator)
+  if str_contains "$_raw_out" "str_contains \"\$x\" \"$_colon_space\""
+    test_pass
+  else
+    test_fail "colon-space in string was transformed: $_raw_out"
+  end
+}
+
+# This one should PASS - it's the workaround that currently works
+test "workaround: newline before while transforms correctly" {
+  _raw_nl=$(printf 'i=0\nwhile $i < 5: echo hi; i++' | "$_shsh" raw -)
+  _check_transformed='while ['
+  if str_contains "$_raw_nl" "$_check_transformed"
+    test_pass
+  else
+    test_fail "while not transformed"
+  end
+}
+
 echo
 echo "=== Runtime Helpers ==="
 
