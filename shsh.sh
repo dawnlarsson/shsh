@@ -12,7 +12,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.48.0"
+VERSION="0.49.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1706,42 +1706,77 @@ emit_inline_statement() {
   emit_with_try_check "${inline_indent}${inline_statement}"
 }
 
-transform_line() {
-  line="$1"
-  R="${line#"${line%%[![:space:]]*}"}"; stripped="$R"
-  R="${line%%[![:space:]]*}"; indent="$R"
+_handle_conditional() {
+  _hc_kw="$1" _hc_rest="$2" _hc_indent="$3" _hc_suffix="$4" _hc_push="$5"
 
-  if [ "$single_line_if_active" = 1 ]; then
-    continues_single_line=0
-    if [ "$indent" = "$single_line_if_indent" ]; then
-      if str_starts "$stripped" "elif "; then
-        continues_single_line=1
+  if _parse_colon_syntax "$_hc_rest"; then
+    _strip_inline_end
+    emit_condition "$_hc_kw" "$_pcs_cond" "$_hc_indent" "; $_hc_suffix"
+    emit_with_try_check "${_hc_indent}  ${_pcs_body}"
+    if [ "$_hc_kw" = "while" ]; then
+      printf "${_hc_indent}done\n"
+      if in_try_block; then
+        current_try_depth
+        printf "${_hc_indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
       fi
-      if str_starts "$stripped" "else"; then
-        continues_single_line=1
-      fi
+    elif [ "$_has_inline_end" = 1 ]; then
+      printf "${_hc_indent}fi\n"
+    elif [ "$_hc_kw" = "if" ]; then
+      single_line_if_active=1
+      single_line_if_indent="$_hc_indent"
     fi
+  elif str_contains "$_hc_rest" "; $_hc_suffix"; then
+    printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
+    if [ -n "$_hc_push" ]; then
+      push "$_hc_push"
+    fi
+  else
+    emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
+    if [ -n "$_hc_push" ]; then
+      push "$_hc_push"
+    fi
+  fi
+}
 
-    if [ "$continues_single_line" = 1 ]; then
-      converts_to_multiline=0
-      if str_starts "$stripped" "elif "; then
-        if ! str_contains "$stripped" "$COLON_SPACE"; then
-          converts_to_multiline=1
+_close_single_line_if() {
+  if [ "$single_line_if_active" = 0 ]; then
+    return 1
+  fi
+  _csli_indent="$1" _csli_stripped="$2"
+
+  if [ "$_csli_indent" = "$single_line_if_indent" ]; then
+    case $_csli_stripped in
+    "elif "*|"else"*)
+      _converts=0
+      if str_starts "$_csli_stripped" "elif "; then
+        if ! str_contains "$_csli_stripped" "$COLON_SPACE"; then
+          _converts=1
         fi
       fi
-      if [ "$stripped" = "else" ]; then
-        converts_to_multiline=1
+      if [ "$_csli_stripped" = "else" ]; then
+        _converts=1
       fi
 
-      if [ "$converts_to_multiline" = 1 ]; then
+      if [ "$_converts" = 1 ]; then
         single_line_if_active=0
         push i
       fi
-    else
-      printf '%s\n' "${single_line_if_indent}fi"
-      single_line_if_active=0
-    fi
+      return 1
+      ;;
+    esac
   fi
+
+  printf '%s\n' "${single_line_if_indent}fi"
+  single_line_if_active=0
+  return 0
+}
+
+transform_line() {
+  line="$1"
+  R="${line%%[![:space:]]*}"; indent="$R"
+  R="${line#"${line%%[![:space:]]*}"}"; stripped="$R"
+
+  _close_single_line_if "$indent" "$stripped"
 
   case $stripped in
 
@@ -1755,26 +1790,21 @@ transform_line() {
     ;;
   "end")
     peek
-    if [ "$R" = "s" ] || [ "$R" = "S" ]; then
-      printf "${indent}  ;;\n"
-      printf "${indent}esac\n"
-      pop
-    elif [ "$R" = "i" ]; then
+    case $R in
+    s|S)
+      printf "${indent}  ;;\n${indent}esac\n"
+      ;;
+    i)
       printf "${indent}fi\n"
-      pop
-    elif [ "$R" = "c" ]; then
-      printf "${indent}fi\n"
-      try_depth_dec
-      pop
-    elif [ "$R" = "t" ]; then
-      printf "${indent}_shsh_brk_$try_depth=1; done\n"
-      try_depth_dec
-      pop
-    fi
-
-    ;;
-  "else")
-    printf "${indent}else\n"
+      ;;
+    c)
+      printf "${indent}fi\n"; try_depth_dec
+      ;;
+    t)
+      printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec
+      ;;
+    esac
+    pop
 
     ;;
   "done")
@@ -1785,26 +1815,24 @@ transform_line() {
     fi
 
     ;;
-  "}")
-    peek
-    if [ "$R" = "T" ]; then
-      pop
-      test_block_name=""
-    else
-      printf '%s\n' "$line"
-    fi
+  "else")
+    printf "${indent}else\n"
 
     ;;
-  "default")
-    peek; _peek="$R"
-    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
-      if [ "$_peek" = "S" ]; then
+  "else:"*|"default:"*)
+    if str_starts "$stripped" "else:"; then
+      printf "${indent}else\n"
+    else
+      peek
+      if [ "$R" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
       switch_mark_used
       printf "${indent}*)\n"
-    else
-      printf '%s\n' "$line"
+    fi
+    str_after "$stripped" ":"; R="${R#"${R%%[![:space:]]*}"}"
+    if [ -n "$R" ]; then
+      emit_inline_statement "${indent}  " "$R"
     fi
 
     ;;
@@ -1826,161 +1854,94 @@ transform_line() {
 
     ;;
   "if "*)
-    str_after "$stripped" "if "; rest="$R"
-    if _parse_colon_syntax "$rest"; then
-      _strip_inline_end
-      emit_condition "if" "$_pcs_cond" "$indent" "$SEMICOLON_THEN"
-      emit_with_try_check "${indent}  ${_pcs_body}"
-      if [ "$_has_inline_end" = 1 ]; then
-        printf '%s\n' "${indent}fi"
-      else
-        single_line_if_active=1
-        single_line_if_indent="$indent"
-      fi
-    elif str_contains "$stripped" "$SEMICOLON_THEN"; then
-      printf '%s\n' "$line"
-      push i
-    else
-      emit_condition "if" "$rest" "$indent" "$SEMICOLON_THEN"
-      push i
-    fi
+    str_after "$stripped" "if "
+    _handle_conditional "if" "$R" "$indent" "then" "i"
 
     ;;
   "elif "*)
-    str_after "$stripped" "elif "; rest="$R"
-    if _parse_colon_syntax "$rest"; then
-      emit_condition "elif" "$_pcs_cond" "$indent" "$SEMICOLON_THEN"
-      emit_with_try_check "${indent}  ${_pcs_body}"
-    elif str_contains "$stripped" "$SEMICOLON_THEN"; then
-      printf '%s\n' "$line"
-    else
-      emit_condition "elif" "$rest" "$indent" "$SEMICOLON_THEN"
-    fi
-
-    ;;
-  "else:"*)
-    str_after "$stripped" "else:"; statement="$R"
-    R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
-    printf "${indent}else\n"
-    emit_with_try_check "${indent}  ${statement}"
-    if [ "$single_line_if_active" = 1 ]; then
-      printf "${indent}fi\n"
-      single_line_if_active=0
-    fi
+    str_after "$stripped" "elif "
+    _handle_conditional "elif" "$R" "$indent" "then" ""
 
     ;;
   "while "*)
-    str_after "$stripped" "while "; rest="$R"
-    if _parse_colon_syntax "$rest"; then
-      _strip_inline_end
-      emit_condition "while" "$_pcs_cond" "$indent" "$SEMICOLON_DO"
-      emit_with_try_check "${indent}  ${_pcs_body}"
-      printf "${indent}done\n"
-      if in_try_block; then
-        current_try_depth
-        printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
-      fi
-    elif str_contains "$stripped" "$SEMICOLON_DO"; then
-      printf '%s\n' "$line"
-    else
-      emit_condition "while" "$rest" "$indent" "$SEMICOLON_DO"
-    fi
+    str_after "$stripped" "while "
+    _handle_conditional "while" "$R" "$indent" "do" ""
 
     ;;
   "for "*)
-    if str_contains "$stripped" "$SEMICOLON_DO"; then
+    if str_contains "$stripped" "; do"; then
       printf '%s\n' "$line"
     else
       printf "${indent}${stripped}; do\n"
     fi
 
     ;;
-  "test "*" {"*)
-    str_after "$stripped" "test "; _test_rest="$R"
-    str_before "$_test_rest" " {"; _test_name="$R"
-    case $_test_name in
-    '"'*'"')
-      _test_name="${_test_name#\"}"
-      _test_name="${_test_name%\"}"
-      ;;
-    "'"*"'")
-      _test_name="${_test_name#\'}"
-      _test_name="${_test_name%\'}"
-      ;;
-    esac
-    test_block_name="$_test_name"
-    _has_tests=1
-    printf "${indent}test_start %s\n" "'$_test_name'"
-    push T
-
-    ;;
   "switch "*)
-    str_after "$stripped" "switch "; expression="$R"
-    printf "${indent}case $expression in\n"
+    str_after "$stripped" "switch "
+    printf "${indent}case $R in\n"
     push s
 
     ;;
   "case "*)
-    peek; _peek="$R"
-    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
-      str_after "$stripped" "case "; rest="$R"
-
-      if [ "$_peek" = "S" ]; then
+    peek
+    case $R in
+    s|S)
+      if [ "$R" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
       switch_mark_used
-
-      if str_contains "$rest" "$COLON_SPACE"; then
-        str_before "$rest" "$COLON_SPACE"; maybe_pattern="$R"
-        str_after "$rest" "$COLON_SPACE"; maybe_statement="$R"
-        R="${maybe_statement#"${maybe_statement%%[![:space:]]*}"}"; maybe_statement="$R"
-
-        is_single_line=0
-        if ! str_contains "$maybe_pattern" '"' && ! str_contains "$maybe_pattern" "'"; then
-          if [ -n "$maybe_statement" ]; then
-            is_single_line=1
-          fi
+      str_after "$stripped" "case "; _case_rest="$R"
+      if _parse_colon_syntax "$_case_rest"; then
+        if [ -n "$_pcs_body" ]; then
+          printf '%s\n' "${indent}${_pcs_cond})"
+          emit_inline_statement "${indent}  " "$_pcs_body"
         else
-          if [ -n "$maybe_statement" ]; then
-            is_single_line=1
-          fi
-        fi
-
-        if [ "$is_single_line" = 1 ]; then
-          printf '%s\n' "${indent}${maybe_pattern})"
-          emit_inline_statement "${indent}  " "$maybe_statement"
-        else
-          if str_ends "$rest" ":"; then
-            R="${rest%":"*}"; [ "$R" != "$rest" ]
-            rest="$R"
-          fi
-          printf '%s\n' "${indent}${rest})"
+          _case_rest="${_case_rest%:}"
+          printf '%s\n' "${indent}${_case_rest})"
         fi
       else
-        if str_ends "$rest" ":"; then
-          R="${rest%":"*}"; [ "$R" != "$rest" ]
-          rest="$R"
-        fi
-        printf '%s\n' "${indent}${rest})"
+        _case_rest="${_case_rest%:}"
+        printf '%s\n' "${indent}${_case_rest})"
       fi
-    else
+      ;;
+    *)
       printf '%s\n' "$line"
-    fi
+      ;;
+    esac
 
     ;;
-  "default:"*)
-    peek; _peek="$R"
-    if [ "$_peek" = "s" ] || [ "$_peek" = "S" ]; then
-      if [ "$_peek" = "S" ]; then
+  "default")
+    peek
+    case $R in
+    s|S)
+      if [ "$R" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
       switch_mark_used
-      str_after "$stripped" "default:"; statement="$R"
-      R="${statement#"${statement%%[![:space:]]*}"}"; statement="$R"
       printf "${indent}*)\n"
-      if [ -n "$statement" ]; then
-        emit_inline_statement "${indent}  " "$statement"
-      fi
+      ;;
+    *)
+      printf '%s\n' "$line"
+      ;;
+    esac
+
+    ;;
+  "test "*" {"*)
+    str_after "$stripped" "test "
+    str_before "$R" " {"; _test_name="$R"
+    _test_name="${_test_name#\"}"
+    _test_name="${_test_name%\"}"
+    _test_name="${_test_name#\'}"
+    _test_name="${_test_name%\'}"
+    printf "${indent}test_start '%s'\n" "$_test_name"
+    push T
+
+    ;;
+  "}")
+    peek
+    if [ "$R" = "T" ]; then
+      pop
+      test_block_name=""
     else
       printf '%s\n' "$line"
     fi
