@@ -12,7 +12,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.49.0"
+VERSION="0.50.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -728,28 +728,30 @@ current_try_depth() {
   R=$_ctd_n
 }
 
+emit_try_break() {
+  if in_try_block; then
+    current_try_depth
+    printf '%s[ "$_shsh_brk_%s" -eq 1 ] && break\n' "$1" "$R"
+  fi
+}
+
 _transform_arith() {
   _ta_stmt="$1"
 
+  _ta_suffix="" _ta_delta=""
   if str_ends "$_ta_stmt" "++"; then
-    str_before "$_ta_stmt" "++"; _ta_var="$R"
-    case $_ta_var in
-    ""|*[!a-zA-Z0-9_]*)
-      return 1
-      ;;
-    esac
-    R="${_ta_var}=\$((${_ta_var} + 1))"
-    return 0
+    _ta_suffix="++"; _ta_delta="+ 1"
+  elif str_ends "$_ta_stmt" "--"; then
+    _ta_suffix="--"; _ta_delta="- 1"
   fi
-
-  if str_ends "$_ta_stmt" "--"; then
-    str_before "$_ta_stmt" "--"; _ta_var="$R"
+  if [ -n "$_ta_suffix" ]; then
+    str_before "$_ta_stmt" "$_ta_suffix"; _ta_var="$R"
     case $_ta_var in
     ""|*[!a-zA-Z0-9_]*)
       return 1
       ;;
     esac
-    R="${_ta_var}=\$((${_ta_var} - 1))"
+    R="${_ta_var}=\$((${_ta_var} ${_ta_delta}))"
     return 0
   fi
 
@@ -813,518 +815,198 @@ transform_statement() {
   esac
 }
 
+# Static array/map optimization helpers
+_oac_fail() { R="$_oac_stmt"; return 1; }
+_oac_check_name() { case $1 in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
+_oac_check_int() { case $1 in ""|*[!0-9]*) return 1;; esac; }
+_oac_unquote() {
+  case $1 in
+  '"'*'"') R="${1#\"}"; R="${R%\"}";;
+  "'"*"'") R="${1#\'}"; R="${R%\'}";;
+  *) return 1;;
+  esac
+}
+_oac_extract_var() {
+  case $1 in
+  '"$'*'"') R="${1#\"\$}"; R="${R%\"}"; _oac_check_name "$R";;
+  *) return 1;;
+  esac
+}
+_oac_parse_2args() {
+  str_after "$_oac_stmt" "$1 "; _oac_rest="$R"
+  str_before "$_oac_rest" " "; _oac_arg1="$R"
+  str_after "$_oac_rest" " "; _oac_arg2="$R"
+}
+_oac_parse_3args() {
+  str_after "$_oac_stmt" "$1 "; _oac_rest="$R"
+  str_before "$_oac_rest" " "; _oac_arg1="$R"
+  str_after "$_oac_rest" " "; _oac_rest="$R"
+  str_before "$_oac_rest" " "; _oac_arg2="$R"
+  str_after "$_oac_rest" " "; _oac_arg3="$R"
+}
+
 # Static array/map optimization - emit direct variable access when names/indices are literals
 optimize_static() {
   _oac_stmt="$1"
   case $_oac_stmt in
 
   "array_get "*)
-    str_after "$_oac_stmt" "array_get "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_idx="$R"
-
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_idx in
-    ""|*[!0-9]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_2args "array_get"
+    _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_int "$_oac_idx" || _oac_fail || return 1
     R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
     return 0
 
     ;;
   "map_get "*)
-    str_after "$_oac_stmt" "map_get "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_key="$R"
-
-    case $_oac_key in
-    '"'*'"')
-      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
-      ;;
-    "'"*"'")
-      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
-      ;;
-    esac
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_key in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_2args "map_get"
+    _oac_name="$_oac_arg1"
+    _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="R=\"\${__shsh_map_${_oac_name}_${_oac_key}}\""
     return 0
 
     ;;
   "map_has "*)
-    str_after "$_oac_stmt" "map_has "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_key="$R"
-
-    case $_oac_key in
-    '"'*'"')
-      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
-      ;;
-    "'"*"'")
-      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
-      ;;
-    esac
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_key in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_2args "map_has"
+    _oac_name="$_oac_arg1"
+    _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="[ \"\${__shsh_map_${_oac_name}_${_oac_key}+x}\" ]"
     return 0
 
     ;;
   "array_len "*)
     str_after "$_oac_stmt" "array_len "; _oac_name="$R"
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="R=\"\${__shsh_${_oac_name}_n:-0}\""
     return 0
 
     ;;
   "array_set "*)
-    str_after "$_oac_stmt" "array_set "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_idx="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
-
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_idx in
-    ""|*[!0-9]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_3args "array_set"
+    _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"; _oac_val="$_oac_arg3"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_int "$_oac_idx" || _oac_fail || return 1
     R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
     return 0
 
     ;;
   "map_set "*)
-    str_after "$_oac_stmt" "map_set "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_key="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
-
-    case $_oac_key in
-    '"'*'"')
-      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
-      ;;
-    "'"*"'")
-      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
-      ;;
-    esac
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_key in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_3args "map_set"
+    _oac_name="$_oac_arg1"; _oac_val="$_oac_arg3"
+    _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="__shsh_map_${_oac_name}_${_oac_key}=${_oac_val}; [ \"\${__shsh_map_${_oac_name}_${_oac_key}__exists}\" ] || { __shsh_map_${_oac_name}_${_oac_key}__exists=1; _ms_i=\${__shsh_mapkeys_${_oac_name}_n:-0}; eval \"__shsh_mapkeys_${_oac_name}_\$_ms_i=\\\"${_oac_key}\\\"\"; __shsh_mapkeys_${_oac_name}_n=\$((_ms_i + 1)); }"
     return 0
 
     ;;
   "map_delete "*)
-    str_after "$_oac_stmt" "map_delete "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_key="$R"
-
-    case $_oac_key in
-    '"'*'"')
-      _oac_key="${_oac_key#\"}"; _oac_key="${_oac_key%\"}"
-      ;;
-    "'"*"'")
-      _oac_key="${_oac_key#\'}"; _oac_key="${_oac_key%\'}"
-      ;;
-    esac
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-    case $_oac_key in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
+    _oac_parse_2args "map_delete"
+    _oac_name="$_oac_arg1"
+    _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
+    _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="unset __shsh_map_${_oac_name}_${_oac_key}"
     return 0
 
     ;;
   "array_clear "*)
     str_after "$_oac_stmt" "array_clear "; _oac_name="$R"
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="__shsh_${_oac_name}_n=0"
     return 0
 
     ;;
   "array_add "*)
-    str_after "$_oac_stmt" "array_add "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
+    _oac_parse_2args "array_add"
+    _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
 
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
-
-    case $_oac_val in
-    '"'*'"')
-      _oac_inner="${_oac_val#\"}"
-      _oac_inner="${_oac_inner%\"}"
-      case $_oac_inner in
-      *'"'*|*'\'*)
-        R="$_oac_stmt"
-        return 1
-        ;;
-      *)
-        R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_inner}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
+    # Check for problematic characters in quoted strings
+    if _oac_unquote "$_oac_val"; then
+      case $R in
+      *'"'*|*"'"*|*'\\'*)
+        _oac_fail; return 1
         ;;
       esac
-      ;;
-    "'"*"'")
-      _oac_inner="${_oac_val#\'}"
-      _oac_inner="${_oac_inner%\'}"
-      case $_oac_inner in
-      *'"'*)
-        R="$_oac_stmt"
-        return 1
-        ;;
-      *)
-        R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_inner}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
-        ;;
-      esac
-      ;;
-    '$'*)
-      R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
-      ;;
-    *)
-      R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
-      ;;
-    esac
+      _oac_val="$R"
+    fi
+
+    R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
     return 0
 
     ;;
   "str_before_last "*)
-    str_after "$_oac_stmt" "str_before_last "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_arg1="$R"
-    str_after "$_oac_rest" " "; _oac_arg2="$R"
-
-    case $_oac_arg2 in
-    '"'*'"')
-      _oac_delim="${_oac_arg2#\"}"
-      _oac_delim="${_oac_delim%\"}"
-      ;;
-    "'"*"'")
-      _oac_delim="${_oac_arg2#\'}"
-      _oac_delim="${_oac_delim%\'}"
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_parse_2args "str_before_last"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    return 0
 
     ;;
   "str_after_last "*)
-    str_after "$_oac_stmt" "str_after_last "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_arg1="$R"
-    str_after "$_oac_rest" " "; _oac_arg2="$R"
-
-    case $_oac_arg2 in
-    '"'*'"')
-      _oac_delim="${_oac_arg2#\"}"
-      _oac_delim="${_oac_delim%\"}"
-      ;;
-    "'"*"'")
-      _oac_delim="${_oac_arg2#\'}"
-      _oac_delim="${_oac_delim%\'}"
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_parse_2args "str_after_last"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    return 0
 
     ;;
   "str_contains "*)
-    str_after "$_oac_stmt" "str_contains "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_arg1="$R"
-    str_after "$_oac_rest" " "; _oac_arg2="$R"
-
-    case $_oac_arg2 in
-    '"'*'"')
-      _oac_delim="${_oac_arg2#\"}"
-      _oac_delim="${_oac_delim%\"}"
-      ;;
-    "'"*"'")
-      _oac_delim="${_oac_arg2#\'}"
-      _oac_delim="${_oac_delim%\'}"
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\"*) ;; *) false;; esac"
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_parse_2args "str_contains"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\"*) ;; *) false;; esac"
+    return 0
 
     ;;
   "str_starts "*)
-    str_after "$_oac_stmt" "str_starts "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_arg1="$R"
-    str_after "$_oac_rest" " "; _oac_arg2="$R"
-
-    case $_oac_arg2 in
-    '"'*'"')
-      _oac_delim="${_oac_arg2#\"}"
-      _oac_delim="${_oac_delim%\"}"
-      ;;
-    "'"*"'")
-      _oac_delim="${_oac_arg2#\'}"
-      _oac_delim="${_oac_delim%\'}"
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="case \"\$${_oac_varname}\" in \"${_oac_delim}\"*) ;; *) false;; esac"
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_parse_2args "str_starts"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="case \"\$${_oac_varname}\" in \"${_oac_delim}\"*) ;; *) false;; esac"
+    return 0
 
     ;;
   "str_ends "*)
-    str_after "$_oac_stmt" "str_ends "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_arg1="$R"
-    str_after "$_oac_rest" " "; _oac_arg2="$R"
-
-    case $_oac_arg2 in
-    '"'*'"')
-      _oac_delim="${_oac_arg2#\"}"
-      _oac_delim="${_oac_delim%\"}"
-      ;;
-    "'"*"'")
-      _oac_delim="${_oac_arg2#\'}"
-      _oac_delim="${_oac_delim%\'}"
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\") ;; *) false;; esac"
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_parse_2args "str_ends"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\") ;; *) false;; esac"
+    return 0
 
     ;;
   "str_trim "*)
     str_after "$_oac_stmt" "str_trim "; _oac_arg1="$R"
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
+    return 0
 
     ;;
   "str_ltrim "*)
     str_after "$_oac_stmt" "str_ltrim "; _oac_arg1="$R"
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
+    return 0
 
     ;;
   "str_rtrim "*)
     str_after "$_oac_stmt" "str_rtrim "; _oac_arg1="$R"
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
+    return 0
 
     ;;
   "str_indent "*)
     str_after "$_oac_stmt" "str_indent "; _oac_arg1="$R"
-
-    case $_oac_arg1 in
-    '"$'*'"')
-      _oac_tmp="${_oac_arg1#\"\$}"
-      _oac_varname="${_oac_tmp%\"}"
-      case $_oac_varname in
-      ""|*[!a-zA-Z0-9_]*)
-        R="$_oac_stmt"; return 1
-        ;;
-      esac
-      R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
-      return 0
-      ;;
-    *)
-      R="$_oac_stmt"
-      return 1
-      ;;
-    esac
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
+    return 0
 
     ;;
   "file_exists "*)
@@ -1352,27 +1034,17 @@ optimize_static() {
 
     ;;
   "default "*)
-    str_after "$_oac_stmt" "default "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
+    _oac_parse_2args "default"
+    _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="[ -z \"\${${_oac_name}}\" ] && ${_oac_name}=${_oac_val}"
     return 0
 
     ;;
   "default_unset "*)
-    str_after "$_oac_stmt" "default_unset "; _oac_rest="$R"
-    str_before "$_oac_rest" " "; _oac_name="$R"
-    str_after "$_oac_rest" " "; _oac_val="$R"
-    case $_oac_name in
-    ""|*[!a-zA-Z0-9_]*)
-      R="$_oac_stmt"; return 1
-      ;;
-    esac
+    _oac_parse_2args "default_unset"
+    _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
+    _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="[ -z \"\${${_oac_name}+x}\" ] && ${_oac_name}=${_oac_val}"
     return 0
 
@@ -1695,10 +1367,7 @@ emit_inline_statement() {
       emit_condition "while" "$inline_condition" "$inline_indent" "$SEMICOLON_DO"
       emit_with_try_check "${inline_indent}  ${inline_body}"
       printf "${inline_indent}done\n"
-      if in_try_block; then
-        current_try_depth
-        printf "${inline_indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
-      fi
+      emit_try_break "$inline_indent"
       return
     fi
   fi
@@ -1715,10 +1384,7 @@ _handle_conditional() {
     emit_with_try_check "${_hc_indent}  ${_pcs_body}"
     if [ "$_hc_kw" = "while" ]; then
       printf "${_hc_indent}done\n"
-      if in_try_block; then
-        current_try_depth
-        printf "${_hc_indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
-      fi
+      emit_try_break "$_hc_indent"
     elif [ "$_has_inline_end" = 1 ]; then
       printf "${_hc_indent}fi\n"
     elif [ "$_hc_kw" = "if" ]; then
@@ -1809,10 +1475,7 @@ transform_line() {
     ;;
   "done")
     printf "${indent}done\n"
-    if in_try_block; then
-      current_try_depth
-      printf "${indent}[ \"\$_shsh_brk_$R\" -eq 1 ] && break\n"
-    fi
+    emit_try_break "$indent"
 
     ;;
   "else")
@@ -1985,6 +1648,8 @@ run_file() {
   eval "$(transform < "$script")"
 }
 
+_extract_fn_name() { str_before "$1" "()"; R="${R#"${R%%[![:space:]]*}"}"; }
+
 emit_runtime_stripped() {
   _ers_source="$1"
   _ers_all_fns="" _ers_in_rt=0 _ers_cur_fn="" _ers_cur_body=""
@@ -2000,8 +1665,7 @@ emit_runtime_stripped() {
     fi
     case "$_ers_line" in
     *"() {"*"}")
-      str_before "$_ers_line" "()"; _ers_cur_fn="$R"
-      R="${_ers_cur_fn#"${_ers_cur_fn%%[![:space:]]*}"}"; _ers_cur_fn="$R"
+      _extract_fn_name "$_ers_line"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
       str_after "$_ers_line" "() { "; _ers_cur_body="$R"
       str_before "$_ers_cur_body" " }"; _ers_cur_body="$R"
@@ -2009,8 +1673,7 @@ emit_runtime_stripped() {
       _ers_cur_fn=""
       ;;
     *"() {"*)
-      str_before "$_ers_line" "()"; _ers_cur_fn="$R"
-      R="${_ers_cur_fn#"${_ers_cur_fn%%[![:space:]]*}"}"; _ers_cur_fn="$R"
+      _extract_fn_name "$_ers_line"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
       _ers_cur_body=""
       ;;
@@ -2073,8 +1736,7 @@ emit_runtime_stripped() {
       else
         case "$_ers_line" in
         *"() {"*"}")
-          str_before "$_ers_line" "()"; _ers_fn="$R"
-          R="${_ers_fn#"${_ers_fn%%[![:space:]]*}"}"; _ers_fn="$R"
+          _extract_fn_name "$_ers_line"; _ers_fn="$R"
           case "$_rt_needed" in
           *" $_ers_fn "*)
             printf '%s\n' "$_ers_line"
@@ -2082,8 +1744,7 @@ emit_runtime_stripped() {
           esac
           ;;
         *"() {"*)
-          str_before "$_ers_line" "()"; _ers_fn="$R"
-          R="${_ers_fn#"${_ers_fn%%[![:space:]]*}"}"; _ers_fn="$R"
+          _extract_fn_name "$_ers_line"; _ers_fn="$R"
           case "$_rt_needed" in
           *" $_ers_fn "*)
             _ers_skip=0
@@ -2169,6 +1830,56 @@ emit_runtime() {
   done < "$0"
 }
 
+if file_exists "$1"; then
+  run_file "$@"
+  exit
+fi
+
+case $1 in
+  raw)
+    if [ -z "$2" ] || [ "$2" = "-" ]; then
+      transform
+    else
+      transform < "$2"
+    fi
+    ;;
+  build)
+    printf '#!/bin/sh\n'
+    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
+    if [ -z "$2" ] || [ "$2" = "-" ]; then
+      _es_code="$(transform)"
+    else
+      _es_code="$(transform < "$2")"
+    fi
+    emit_runtime_stripped "$_es_code"
+    printf "$_es_code\n"
+    ;;
+  build_full)
+    printf '#!/bin/sh\n'
+    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
+    emit_runtime
+    if [ -z "$2" ]; then
+      transform
+    else
+      transform < "$2"
+    fi
+    ;;
+  -)
+    eval "$(transform)"
+    ;;
+  version|install|update|uninstall|""|--*|-*)
+    # Handled by slow-path switch below
+    ;;
+  *)
+    R=""
+    eval "$(printf '%s\n' "$*" | transform)"
+    if [ -n "$R" ]; then
+      printf '%s\n' "$R"
+    fi
+    exit
+  ;;
+esac
+
 info() {
     printf "shsh v$VERSION\n\n"
     printf "Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.\n"
@@ -2189,94 +1900,112 @@ info() {
 }
 
 case $1 in
-  raw)
-    if [ -z "$2" ]; then
-      transform
-    elif [ "$2" = "-" ]; then
-      transform
-    else
-      transform < "$2"
-    fi
-    ;;
-  build)
-    printf '#!/bin/sh\n'
-    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
-    if [ -z "$2" ]; then
-      _es_code="$(transform)"
-      emit_runtime_stripped "$_es_code"
-      printf "$_es_code\n"
-    elif [ "$2" = "-" ]; then
-      _es_code="$(transform)"
-      emit_runtime_stripped "$_es_code"
-      printf "$_es_code\n"
-    else
-      _es_code="$(transform < "$2")"
-      emit_runtime_stripped "$_es_code"
-      printf "$_es_code\n"
-    fi
-    ;;
-  build_full)
-    printf '#!/bin/sh\n'
-    printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
-    emit_runtime
-    if [ -z "$2" ]; then
-      transform
-    else
-      transform < "$2"
-    fi
-    ;;
   version)
     printf "shsh $VERSION\n"
     ;;
-  -)
-    eval "$(transform)"
-    ;;
-  -*)
+  ""|--*|-*)
     info
     ;;
-  "")
-    info
-    ;;
-  install)
-    _install_dest=""
-    _install_needs_path=0
+  install|update)
+    _is_update=0
+    if [ "$1" = "update" ]; then
+      _is_update=1
+    fi
+    _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
+    _old_ver="$VERSION"
+    _dest=""
+    _needs_path=0
 
-    for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
-      case ":$PATH:" in
-        *":$_try_dir:"*)
-          if path_writable "$_try_dir"; then
-            _install_dest="$_try_dir/shsh"
-            break
-          elif [ "$_try_dir" = "/usr/local/bin" ]; then
-            _install_dest="$_try_dir/shsh"
-            break
-          fi
-        ;;
-      esac
-    done
-
-    if [ -z "$_install_dest" ]; then
-      mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
-      _install_dest="$HOME/.local/bin/shsh"
-      _install_needs_path=1
+    if [ "$_is_update" = 1 ]; then
+      for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
+        if file_executable "$_try_loc"; then
+          _dest="$_try_loc"
+          break
+        fi
+      done
     fi
 
-    _install_dir=$(dirname "$_install_dest")
+    if [ -z "$_dest" ]; then
+      for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
+        case ":$PATH:" in
+          *":$_try_dir:"*)
+            if path_writable "$_try_dir"; then
+              _dest="$_try_dir/shsh"
+              break
+            elif [ "$_try_dir" = "/usr/local/bin" ]; then
+              _dest="$_try_dir/shsh"
+              break
+            fi
+          ;;
+        esac
+      done
 
-    if ! dir_exists "$_install_dir"; then
-      mkdir -p "$_install_dir" 2>/dev/null || sudo mkdir -p "$_install_dir"
+      if [ -z "$_dest" ]; then
+        mkdir -p "$HOME/.local/bin" || { printf "error: cannot create %s\n" "$HOME/.local/bin" >&2; exit 1; }
+        _dest="$HOME/.local/bin/shsh"
+        _needs_path=1
+      fi
     fi
 
-    if cp "$0" "$_install_dest" 2>/dev/null && chmod +x "$_install_dest" 2>/dev/null; then
-      printf "installed: %s\n" "$_install_dest"
+    _dest_dir=$(dirname "$_dest")
+    if ! dir_exists "$_dest_dir"; then
+      mkdir -p "$_dest_dir" 2>/dev/null || sudo mkdir -p "$_dest_dir"
+    fi
+
+    _src=""
+    if [ "$_is_update" = 1 ]; then
+      printf "downloading shsh from github...\n"
+      _tmp=$(mktemp)
+      _download_ok=0
+      if command -v curl >/dev/null 2>&1; then
+        if curl -fsSL "$_url" -o "$_tmp"; then
+          _download_ok=1
+        fi
+      elif command -v wget >/dev/null 2>&1; then
+        if wget -qO "$_tmp" "$_url"; then
+          _download_ok=1
+        fi
+      else
+        rm -f "$_tmp"
+        printf "error: curl or wget required\n" >&2
+        exit 1
+      fi
+      if [ "$_download_ok" = 0 ]; then
+        rm -f "$_tmp"
+        printf "error: download failed\n" >&2
+        exit 1
+      fi
+      _src="$_tmp"
     else
-      printf "installing to %s (requires sudo)...\n" "$_install_dest"
-      sudo cp "$0" "$_install_dest" && sudo chmod +x "$_install_dest"
-      sudo chown "$USER" "$_install_dest"
-      printf "installed: %s\n" "$_install_dest"
+      _src="$0"
     fi
 
-    if [ "$_install_needs_path" = 1 ]; then
+    _verb="installed"
+    _copy_cmd="cp"
+    if [ "$_is_update" = 1 ]; then
+      _verb="updated"
+      _copy_cmd="mv"
+    fi
+
+    if $_copy_cmd "$_src" "$_dest" 2>/dev/null && chmod +x "$_dest" 2>/dev/null; then
+      printf "%s: %s\n" "$_verb" "$_dest"
+    else
+      printf "installing to %s (requires sudo)...\n" "$_dest"
+      sudo $_copy_cmd "$_src" "$_dest" && sudo chmod +x "$_dest"
+      sudo chown "$USER" "$_dest"
+      printf "%s: %s\n" "$_verb" "$_dest"
+    fi
+
+    if [ "$_is_update" = 1 ]; then
+      _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
+      if [ "$_new_ver" = "$_old_ver" ]; then
+        printf "version: %s (already up to date)\n" "$_old_ver"
+      else
+        printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
+      fi
+    fi
+
+    if [ "$_needs_path" = 1 ] && [ "$_is_update" = 0 ]; then
       _shell_rc=""
       _path_export='export PATH="$HOME/.local/bin:$PATH"'
 
@@ -2320,7 +2049,7 @@ case $1 in
         printf "\n\033[1;33mNOTE:\033[0m If shsh isn't found, run:\n"
         printf "  \033[1mexec \$SHELL\033[0m\n"
       fi
-    else
+    elif [ "$_is_update" = 0 ]; then
       printf "\nshsh is ready to use!\n"
     fi
     ;;
@@ -2339,90 +2068,6 @@ case $1 in
     done
     if [ "$_found" = 0 ]; then
       printf "shsh not found in standard locations\n"
-    fi
-    ;;
-  update)
-    _url="https://raw.githubusercontent.com/dawnlarsson/shsh/main/shsh.sh"
-    _old_ver="$VERSION"
-    _dest=""
-
-    for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
-      if file_executable "$_try_loc"; then
-        _dest="$_try_loc"
-        break
-      fi
-    done
-
-    if [ -z "$_dest" ]; then
-      for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
-        case ":$PATH:" in
-          *":$_try_dir:"*)
-            if path_writable "$_try_dir" || [ "$_try_dir" = "/usr/local/bin" ]; then
-              mkdir -p "$_try_dir" 2>/dev/null || true
-              _dest="$_try_dir/shsh"
-              break
-            fi
-          ;;
-        esac
-      done
-
-      if [ -z "$_dest" ]; then
-        mkdir -p "$HOME/.local/bin"
-        _dest="$HOME/.local/bin/shsh"
-      fi
-    fi
-
-    _dest_dir=$(dirname "$_dest")
-
-    printf "downloading shsh from github...\n"
-    _tmp=$(mktemp)
-    _download_ok=0
-
-    if command -v curl >/dev/null 2>&1; then
-      if curl -fsSL "$_url" -o "$_tmp"; then
-        _download_ok=1
-      fi
-    elif command -v wget >/dev/null 2>&1; then
-      if wget -qO "$_tmp" "$_url"; then
-        _download_ok=1
-      fi
-    else
-      rm -f "$_tmp"
-      printf "error: curl or wget required\n" >&2
-      exit 1
-    fi
-
-    if [ "$_download_ok" = 0 ]; then
-      rm -f "$_tmp"
-      printf "error: download failed\n" >&2
-      exit 1
-    fi
-
-    if mv "$_tmp" "$_dest" 2>/dev/null && chmod +x "$_dest" 2>/dev/null; then
-      printf "updated: %s\n" "$_dest"
-    else
-      printf "installing to %s (requires sudo)...\n" "$_dest"
-      sudo mv "$_tmp" "$_dest" && sudo chmod +x "$_dest"
-      sudo chown "$USER" "$_dest"
-      printf "updated: %s\n" "$_dest"
-    fi
-
-    _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
-    if [ "$_new_ver" = "$_old_ver" ]; then
-      printf "version: %s (already up to date)\n" "$_old_ver"
-    else
-      printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
-    fi
-    ;;
-  *)
-    if file_exists "$1"; then
-      run_file "$@"
-    else
-      R=""
-      eval "$(printf '%s\n' "$*" | transform)"
-      if [ -n "$R" ]; then
-        printf '%s\n' "$R"
-      fi
     fi
   ;;
 esac
