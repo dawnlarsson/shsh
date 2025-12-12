@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.51.0"
+VERSION="0.52.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1326,9 +1326,11 @@ _handle_conditional() {
   elif str_contains "$_hc_rest" "; $_hc_suffix"
     printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
     if "$_hc_push" != "": push "$_hc_push"
+    if "$_hc_kw" == "while": push w
   else
     emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
     if "$_hc_push" != "": push "$_hc_push"
+    if "$_hc_kw" == "while": push w
   end
 }
 
@@ -1413,6 +1415,8 @@ transform_line() {
     switch $R
     case s|S: printf "${indent}  ;;\n${indent}esac\n"
     case i: printf "${indent}fi\n"
+    case f: printf "${indent}done\n"
+    case w: printf "${indent}done\n"; emit_try_break "$indent"
     case c: printf "${indent}fi\n"; try_depth_dec
     case t: printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec
     end
@@ -1421,6 +1425,7 @@ transform_line() {
   case "done"
     printf "${indent}done\n"
     emit_try_break "$indent"
+    peek; if "$R" == "f" || "$R" == "w": pop
   
   case "else"
     printf "${indent}else\n"
@@ -1472,12 +1477,11 @@ transform_line() {
       _strip_inline_end
       printf '%s\n' "${indent}for ${_pcs_cond}; do"
       emit_with_try_check "${indent}  ${_pcs_body}"
-      if $_has_inline_end == 1
-        printf "${indent}done\n"
-        emit_try_break "$indent"
-      end
+      printf "${indent}done\n"
+      emit_try_break "$indent"
     else
       printf "${indent}${stripped}; do\n"
+      push f
     end
   
   case "switch "*
@@ -1562,13 +1566,25 @@ transform() {
   if $_has_tests == 1: printf "test_end\n"
 }
 
-run_file() {
+if file_exists "$1"
   script="$1"
   shift
   eval "$(transform < "$script")"
-}
+  exit
+end
 
 _extract_fn_name() { str_before "$1" "()"; str_ltrim "$R"; }
+
+_rt_need_fn() {
+  switch "$_rt_needed"
+  case *" $1 "*: return
+  end
+  _rt_needed="$_rt_needed $1 "
+  eval "_rnf_deps=\"\$_rt_deps_$1\""
+  for _rnf_dep in $_rnf_deps
+    _rt_need_fn "$_rnf_dep"
+  done
+}
 
 emit_runtime_stripped() {
   _ers_source="$1"
@@ -1689,17 +1705,6 @@ emit_runtime_stripped() {
   done < "$0"
 }
 
-_rt_need_fn() {
-  switch "$_rt_needed"
-  case *" $1 "*: return
-  end
-  _rt_needed="$_rt_needed $1 "
-  eval "_rnf_deps=\"\$_rt_deps_$1\""
-  for _rnf_dep in $_rnf_deps
-    _rt_need_fn "$_rnf_dep"
-  done
-}
-
 emit_runtime() {
   _er_emit=0
   while IFS= read -r _er_line || nonempty "$_er_line"
@@ -1715,11 +1720,6 @@ emit_runtime() {
     end
   done < "$0"
 }
-
-if file_exists "$1"
-  run_file "$@"
-  exit
-end
 
 switch $1
   case raw

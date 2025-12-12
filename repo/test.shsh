@@ -5523,6 +5523,156 @@ SHSH
 }
 
 echo
+echo "=== Inline Control Structures ==="
+
+test "inline for basic" {
+  _ilf=""
+  for i in a b c: _ilf="$_ilf$i"; end
+  test_equals "$_ilf" "abc"
+}
+
+test "inline for with numbers" {
+  _ilfn=0
+  for n in 1 2 3 4 5: _ilfn=$((_ilfn + n)); end
+  test_equals "$_ilfn" "15"
+}
+
+test "inline for single item" {
+  _ilfs=""
+  for x in only: _ilfs="$x"; end
+  test_equals "$_ilfs" "only"
+}
+
+test "inline while basic" {
+  _ilw=0
+  _ilwi=0
+  while $_ilwi < 5: _ilw=$((_ilw + 1)); _ilwi=$((_ilwi + 1)); end
+  test_equals "$_ilw" "5"
+}
+
+test "inline while with ++" {
+  _ilwp=0
+  while $_ilwp < 3: _ilwp++; end
+  test_equals "$_ilwp" "3"
+}
+
+test "semicolon before inline for" {
+  _sbif=""; for i in x y z: _sbif="$_sbif$i"; end
+  test_equals "$_sbif" "xyz"
+}
+
+test "semicolon before inline while" {
+  _sbiw=0; while $_sbiw < 4: _sbiw++; end
+  test_equals "$_sbiw" "4"
+}
+
+test "inline for preserves quoting" {
+  _ilfq=""
+  for item in "a b" "c d": _ilfq="$_ilfq[$item]"; end
+  test_equals "$_ilfq" "[a b][c d]"
+}
+
+test "inline while with string comparison" {
+  _ilws="start"
+  _ilwsc=0
+  while "$_ilws" != "done" && $_ilwsc < 3: _ilwsc++; _ilws="done"; end
+  test_equals "$_ilwsc" "1"
+}
+
+test "inline for inside regular for" {
+  _nir=""
+  for outer in 1 2
+    for inner in a b: _nir="$_nir$outer$inner"; end
+  end
+  test_equals "$_nir" "1a1b2a2b"
+}
+
+test "inline while inside regular while" {
+  _niw=""
+  _niwo=0
+  while $_niwo < 2
+    _niwi=0
+    while $_niwi < 2: _niw="$_niw$_niwo$_niwi"; _niwi++; end
+    _niwo++
+  end
+  test_equals "$_niw" "00011011"
+}
+
+test "inline for with command substitution" {
+  _ilfcs=""
+  for f in $(echo "p q r"): _ilfcs="$_ilfcs$f"; end
+  test_equals "$_ilfcs" "pqr"
+}
+
+test "inline while countdown" {
+  _ilwcd=5
+  _ilwcdr=""
+  while $_ilwcd > 0: _ilwcdr="$_ilwcdr$_ilwcd"; _ilwcd=$((_ilwcd - 1)); end
+  test_equals "$_ilwcdr" "54321"
+}
+
+test "multiple inline loops on separate lines" {
+  _mil1=""; for a in 1 2: _mil1="$_mil1$a"; end
+  _mil2=""; for b in 3 4: _mil2="$_mil2$b"; end
+  test_equals "$_mil1$_mil2" "1234"
+}
+
+test "inline for with glob pattern in quotes" {
+  _ilfg=""
+  for p in "*.txt" "*.sh": _ilfg="$_ilfg$p "; end
+  test_equals "$_ilfg" "*.txt *.sh "
+}
+
+test "inline while false never executes" {
+  _ilwf="unchanged"
+  while false: _ilwf="changed"; end
+  test_equals "$_ilwf" "unchanged"
+}
+
+test "inline for empty list" {
+  _ilfe="unchanged"
+  for x in : _ilfe="changed"; end
+  test_equals "$_ilfe" "unchanged"
+}
+
+test "pipe into inline while" {
+  _piw=""
+  echo -e "a\nb\nc" | while read _piwl: _piw="$_piw$_piwl"; end
+  # Note: pipe creates subshell, so _piw won't be set in parent
+  # This tests that the syntax works, not the value
+  test_pass
+}
+
+test "inline while with complex condition" {
+  _ilwcc=0
+  _ilwcca=1
+  _ilwccb=1
+  while $_ilwcca == 1 && $_ilwccb == 1 && $_ilwcc < 3: _ilwcc++; end
+  test_equals "$_ilwcc" "3"
+}
+
+test "chained inline statements" {
+  _cis=0; _cis++
+  for i in 1 2: _cis=$((_cis + i)); end
+  _cis++
+  test_equals "$_cis" "5"
+}
+
+
+# Nested inline control structures are not yet supported
+# test "inline for with break simulation" {
+#   _ilfb=""
+#   for i in 1 2 3 4 5: if $i == 3: _ilfb="$_ilfb!"; end; _ilfb="$_ilfb$i"; end
+#   test_equals "$_ilfb" "12!345"
+# }
+
+# test "inline if inside inline for" {
+#   _iiif=""
+#   for n in 1 2 3 4: if $n > 2: _iiif="$_iiif$n"; end; end
+#   test_equals "$_iiif" "34"
+# }
+
+echo
 echo "========================================"
 echo "passed: $_shsh_test_pass"
 echo "failed: $_shsh_test_fail"

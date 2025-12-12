@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.51.0"
+VERSION="0.52.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1380,10 +1380,16 @@ _handle_conditional() {
     if [ -n "$_hc_push" ]; then
       push "$_hc_push"
     fi
+    if [ "$_hc_kw" = "while" ]; then
+      push w
+    fi
   else
     emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
     if [ -n "$_hc_push" ]; then
       push "$_hc_push"
+    fi
+    if [ "$_hc_kw" = "while" ]; then
+      push w
     fi
   fi
 }
@@ -1480,6 +1486,12 @@ transform_line() {
     i)
       printf "${indent}fi\n"
       ;;
+    f)
+      printf "${indent}done\n"
+      ;;
+    w)
+      printf "${indent}done\n"; emit_try_break "$indent"
+      ;;
     c)
       printf "${indent}fi\n"; try_depth_dec
       ;;
@@ -1493,6 +1505,10 @@ transform_line() {
   "done")
     printf "${indent}done\n"
     emit_try_break "$indent"
+    peek
+    if [ "$R" = "f" ] || [ "$R" = "w" ]; then
+      pop
+    fi
 
     ;;
   "else")
@@ -1556,12 +1572,11 @@ transform_line() {
       _strip_inline_end
       printf '%s\n' "${indent}for ${_pcs_cond}; do"
       emit_with_try_check "${indent}  ${_pcs_body}"
-      if [ "$_has_inline_end" = 1 ]; then
-        printf "${indent}done\n"
-        emit_try_break "$indent"
-      fi
+      printf "${indent}done\n"
+      emit_try_break "$indent"
     else
       printf "${indent}${stripped}; do\n"
+      push f
     fi
 
     ;;
@@ -1668,13 +1683,27 @@ transform() {
   fi
 }
 
-run_file() {
+if file_exists "$1"; then
   script="$1"
   shift
   eval "$(transform < "$script")"
-}
+  exit
+fi
 
 _extract_fn_name() { str_before "$1" "()"; R="${R#"${R%%[![:space:]]*}"}"; }
+
+_rt_need_fn() {
+  case "$_rt_needed" in
+  *" $1 "*)
+    return
+    ;;
+  esac
+  _rt_needed="$_rt_needed $1 "
+  eval "_rnf_deps=\"\$_rt_deps_$1\""
+  for _rnf_dep in $_rnf_deps; do
+    _rt_need_fn "$_rnf_dep"
+  done
+}
 
 emit_runtime_stripped() {
   _ers_source="$1"
@@ -1823,19 +1852,6 @@ emit_runtime_stripped() {
   done < "$0"
 }
 
-_rt_need_fn() {
-  case "$_rt_needed" in
-  *" $1 "*)
-    return
-    ;;
-  esac
-  _rt_needed="$_rt_needed $1 "
-  eval "_rnf_deps=\"\$_rt_deps_$1\""
-  for _rnf_dep in $_rnf_deps; do
-    _rt_need_fn "$_rnf_dep"
-  done
-}
-
 emit_runtime() {
   _er_emit=0
   while IFS= read -r _er_line || [ -n "$_er_line" ]; do
@@ -1855,11 +1871,6 @@ emit_runtime() {
     esac
   done < "$0"
 }
-
-if file_exists "$1"; then
-  run_file "$@"
-  exit
-fi
 
 case $1 in
   raw)
