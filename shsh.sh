@@ -1089,6 +1089,16 @@ _strip_inline_end() {
 emit_with_try_check() {
   R="${1%%[![:space:]]*}"; _ewtc_indent="$R"
   R="${1#"${1%%[![:space:]]*}"}"; _ewtc_stmt="$R"
+  if [ -z "$_ewtc_stmt" ]; then
+    printf '\n'
+    return
+  fi
+  case $_ewtc_stmt in
+  "{"|"}"|*"() {")
+    printf '%s\n' "$1"
+    return
+    ;;
+  esac
   transform_semicolon_parts "$_ewtc_stmt"
   _ewtc_transformed="${_ewtc_indent}$R"
   if in_try_block; then

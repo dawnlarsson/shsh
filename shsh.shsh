@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.52.0"
+VERSION="0.52.1"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1068,6 +1068,16 @@ _strip_inline_end() {
 emit_with_try_check() {
   str_indent "$1"; _ewtc_indent="$R"
   str_ltrim "$1"; _ewtc_stmt="$R"
+  if [ -z "$_ewtc_stmt" ]; then
+    printf '\n'
+    return
+  fi
+  case $_ewtc_stmt in
+  "{"|"}"|*"() {")
+    printf '%s\n' "$1"
+    return
+    ;;
+  esac
   transform_semicolon_parts "$_ewtc_stmt"
   _ewtc_transformed="${_ewtc_indent}$R"
   if in_try_block; then
