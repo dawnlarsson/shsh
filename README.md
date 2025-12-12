@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 638 tests.
+Passing 675 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -645,6 +645,42 @@ str_rtrim "hello  "                 # R="hello"
 str_trim "  hello  "                # R="hello"
 str_indent "    code"               # R="    " (leading whitespace only)
 ```
+
+### scan (Pattern Capture)
+
+Match an input string against a simple pattern containing literal text plus capture variables.
+
+- **Signature**: `scan "<input>" "<pattern>"`
+- **Returns**: `0` on match, `1` on mismatch
+- **Side effects**: assigns captured substrings to shell variables named in the pattern
+
+Pattern syntax:
+
+- Literal text matches literally (must appear at the current input position).
+- `%name` captures text up to the next literal chunk in the pattern.
+- Variable names must be valid shell identifiers: `[A-Za-z_][A-Za-z0-9_]*`.
+
+Examples:
+```sh
+# Capture the remainder
+scan "hello world" "%msg"          # msg="hello world"
+
+# Prefix + capture
+scan "hi bob" "hi %name"            # name="bob"
+
+# Multiple captures using delimiters
+scan "a=1;b=2" "a=%x;b=%y"          # x="1", y="2"
+
+# Captures can be empty
+scan "a=;b=2" "a=%x;b=%y"           # x="", y="2"
+```
+
+Notes / edge behavior:
+
+- This is not a full regex engine; it’s a fast, literal + delimiter-based scanner.
+- The match is **anchored at the start** of the input. (It does not search.)
+- Patterns may match a prefix and leave trailing input; if you need a full-string match, include a trailing literal sentinel in the pattern.
+- Literal percent (`%`) is currently not escapable in patterns.
 
 ### Example: Path Parsing
 ```sh

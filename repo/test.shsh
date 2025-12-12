@@ -3940,6 +3940,376 @@ test "str_contains extended ascii" {
 }
 
 echo
+echo "=== scan ==="
+
+test "scan empty pattern empty input" {
+  scan "" ""
+  ret=$?
+  if $ret == 0
+    test_pass
+  else
+    test_fail "should match"
+  end
+}
+
+test "scan empty pattern non-empty input" {
+  scan "x" ""
+  ret=$?
+  if $ret == 0
+    test_pass
+  else
+    test_fail "should match"
+  end
+}
+
+test "scan literal exact" {
+  scan "hello" "hello"
+  ret=$?
+  if $ret == 0
+    test_pass
+  else
+    test_fail "should match"
+  end
+}
+
+test "scan literal mismatch" {
+  scan "hello" "hellx"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan literal prefix match" {
+  scan "hello" "he"
+  ret=$?
+  if $ret == 0
+    test_pass
+  else
+    test_fail "should match"
+  end
+}
+
+test "scan single capture whole input" {
+  v=""
+  scan "abc" "%v"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v" "abc"
+  end
+}
+
+test "scan prefix then capture" {
+  name=""
+  scan "hi bob" "hi %name"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$name" "bob"
+  end
+}
+
+test "scan capture then suffix" {
+  who=""
+  scan "bob!" "%who!"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$who" "bob"
+  end
+}
+
+test "scan two captures with delimiters" {
+  x="" y=""
+  scan "a=1;b=2" "a=%x;b=%y"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$x" "1"
+  end
+}
+
+test "scan two captures y" {
+  test_equals "$y" "2"
+}
+
+test "scan empty capture allowed" {
+  x="" y=""
+  scan "a=;b=2" "a=%x;b=%y"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$x" ""
+  end
+}
+
+test "scan empty capture allowed y" {
+  test_equals "$y" "2"
+}
+
+test "scan delimiter missing fails" {
+  scan "a=1;b=2" "a=%x;c=%y"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan invalid var name fails" {
+  scan "x" "%1bad"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan lone percent fails" {
+  scan "x" "%"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan consecutive captures edge" {
+  a="" b=""
+  scan "abc" "%a%b"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$a" ""
+  end
+}
+
+test "scan consecutive captures edge b" {
+  test_equals "$b" "abc"
+}
+
+test "scan pattern allows trailing input" {
+  v=""
+  scan "a=1;tail" "a=%v"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v" "1;tail"
+  end
+}
+
+test "scan trailing literal still allows extra input" {
+  v=""
+  scan "a=1!EXTRA" "a=%v!"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v" "1"
+  end
+}
+
+test "scan empty capture at beginning" {
+  v=""
+  scan ":x" "%v:x"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v" ""
+  end
+}
+
+test "scan empty capture at end" {
+  v=""
+  scan "x:" "x:%v"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v" ""
+  end
+}
+
+test "scan repeated delimiters makes empty field" {
+  a="" b=""
+  scan "a==b" "a=%a=%b"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$a" ""
+  end
+}
+
+test "scan repeated delimiters b" {
+  test_equals "$b" "b"
+}
+
+test "scan duplicate var name last wins" {
+  x=""
+  scan "a=1,b=2" "a=%x,b=%x"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$x" "2"
+  end
+}
+
+test "scan underscore-leading var name" {
+  _v=""
+  scan "k=ok" "k=%_v"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$_v" "ok"
+  end
+}
+
+test "scan var name with digits" {
+  v9=""
+  scan "k=ok" "k=%v9"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$v9" "ok"
+  end
+}
+
+test "scan rejects var name with dash" {
+  scan "k=ok" "k=%bad-name"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan captures spaces" {
+  msg=""
+  scan "say hello world!" "say %msg!"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$msg" "hello world"
+  end
+}
+
+test "scan captures glob chars literally" {
+  g=""
+  scan "x=*?[abc]" "x=%g"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$g" "*?[abc]"
+  end
+}
+
+test "scan captures dollar sign literally" {
+  d=""
+  scan "p=\$HOME" "p=%d"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$d" '$HOME'
+  end
+}
+
+test "scan captures backslash literally" {
+  bsl=""
+  scan "p=C:\\Windows" "p=%bsl"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$bsl" "C:\\Windows"
+  end
+}
+
+test "scan captures single quote" {
+  q=""
+  scan "q=it's" "q=%q"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$q" "it's"
+  end
+}
+
+test "scan captures double quote" {
+  dq=""
+  scan "q=\"hi\"" "q=%dq"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$dq" "\"hi\""
+  end
+}
+
+test "scan unicode capture" {
+  u=""
+  scan "café=au lait" "café=%u"
+  ret=$?
+  if $ret != 0
+    test_fail "should match"
+  else
+    test_equals "$u" "au lait"
+  end
+}
+
+test "scan fails when required literal not at start" {
+  scan "xxHELLO" "HELLO"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan cannot match literal percent" {
+  scan "100%" "100%"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+test "scan percent at end fails" {
+  scan "x" "x%"
+  ret=$?
+  if $ret != 0
+    test_pass
+  else
+    test_fail "should not match"
+  end
+}
+
+echo
 echo "=== Nested Blocks ==="
 
 test "if inside switch" {

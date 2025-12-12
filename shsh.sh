@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.52.0"
+VERSION="0.53.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -27,6 +27,60 @@ str_ltrim() { R="${1#"${1%%[![:space:]]*}"}"; }
 str_rtrim() { R="${1%"${1##*[![:space:]]}"}"; }
 str_trim() { R="${1#"${1%%[![:space:]]*}"}"; R="${R%"${R##*[![:space:]]}"}"; }
 str_indent() { R="${1%%[![:space:]]*}"; }
+
+scan() {
+  _sc_in=$1
+  _sc_pat=$2
+
+  while :; do
+    case $_sc_pat in
+      '') return 0 ;;
+    esac
+
+    _sc_lit=${_sc_pat%%\%*}
+    if [ -n "$_sc_lit" ]; then
+      case $_sc_in in
+        "$_sc_lit"*)
+          _sc_in=${_sc_in#"$_sc_lit"}
+          _sc_pat=${_sc_pat#"$_sc_lit"}
+          ;;
+        *) return 1 ;;
+      esac
+      [ -n "$_sc_pat" ] || return 0
+    fi
+
+    case $_sc_pat in
+      %*) _sc_pat=${_sc_pat#\%} ;;
+      *)  return 1 ;;
+    esac
+
+    _sc_var=${_sc_pat%%[!A-Za-z0-9_]*}
+    case $_sc_var in
+      ''|[!A-Za-z_]* ) return 1 ;;
+    esac
+    _sc_pat=${_sc_pat#"$_sc_var"}
+
+    if [ -z "$_sc_pat" ]; then
+      eval "$_sc_var=\"\$_sc_in\""
+      return 0
+    fi
+
+    _sc_next_lit=${_sc_pat%%\%*}
+
+    if [ -z "$_sc_next_lit" ]; then
+      eval "$_sc_var=\"\""
+      continue
+    fi
+
+    _sc_val=${_sc_in%%"$_sc_next_lit"*}
+    [ "$_sc_val" = "$_sc_in" ] && return 1
+
+    eval "$_sc_var=\"\$_sc_val\""
+
+    _sc_in=${_sc_in#*"$_sc_next_lit"}
+    _sc_pat=${_sc_pat#"$_sc_next_lit"}
+  done
+}
 
 _in_quotes() {
   _iq_q="$1"

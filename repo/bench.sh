@@ -198,6 +198,22 @@ done"
     printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
     eval "time_str_indent_$shell=$_time"
   done
+
+  subsection "scan (${ITERATIONS} iterations)"
+
+  for shell in $SHELLS; do
+    _code="
+$RUNTIME
+i=0; while [ \$i -lt $ITERATIONS ]; do
+  scan 'a=1;b=2' 'a=%x;b=%y'
+  scan 'a=;b=2' 'a=%x;b=%y'
+  scan 'a=1;c=2' 'a=%x;b=%y'
+  i=\$((i + 1))
+done"
+    _time=$(run_bench "$shell" "$_code")
+    printf "  %-12s %s\n" "$shell:" "$(format_time $_time)"
+    eval "time_scan_$shell=$_time"
+  done
 }
 
 ########################################
