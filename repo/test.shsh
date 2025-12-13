@@ -24,6 +24,27 @@ test "array_len" {
   test_equals "$R" "3"
 }
 
+test "array_init len" {
+  array_init init_arr 10 20 30 40 50
+  array_len init_arr
+  test_equals "$R" "5"
+}
+
+test "array_init get first" {
+  array_get init_arr 0
+  test_equals "$R" "10"
+}
+
+test "array_init get middle" {
+  array_get init_arr 2
+  test_equals "$R" "30"
+}
+
+test "array_init get last" {
+  array_get init_arr 4
+  test_equals "$R" "50"
+}
+
 test "array_get 0" {
   array_get arr 0
   test_equals "$R" "one"
@@ -38,6 +59,36 @@ test "array_set" {
   array_set arr 1 "TWO"
   array_get arr 1
   test_equals "$R" "TWO"
+}
+
+test "array_set lower index returns success" {
+  array_clear _set_test
+  array_add _set_test "a"
+  array_add _set_test "b"
+  array_add _set_test "c"
+  # Setting at index 0 when len is 3 should still return 0
+  if array_set _set_test 0 "A"
+    test_pass
+  else
+    test_fail "array_set returned non-zero for lower index"
+  end
+}
+
+test "array_set in try block" {
+  try
+    array_clear _try_set
+    i=0
+    while $i < 5
+      array_set _try_set $i "val$i"
+      i++
+    done
+    # Now set at a lower index - should not cause try to fail
+    array_set _try_set 2 "replaced"
+    array_get _try_set 2
+    test_equals "$R" "replaced"
+  catch
+    test_fail "array_set caused try block to fail with error: $error"
+  end
 }
 
 test "array_for count" {
@@ -1866,6 +1917,34 @@ test "++ in function after semicolon" {
 }
 
 echo
+echo "=== str_word ==="
+
+test "str_word first" {
+  str_word "apple banana cherry" 0
+  test_equals "$R" "apple"
+}
+
+test "str_word middle" {
+  str_word "apple banana cherry" 1
+  test_equals "$R" "banana"
+}
+
+test "str_word last" {
+  str_word "apple banana cherry" 2
+  test_equals "$R" "cherry"
+}
+
+test "str_word with extra spaces" {
+  str_word "  foo   bar   baz  " 1
+  test_equals "$R" "bar"
+}
+
+test "str_word assignment" {
+  second = str_word "one two three" 1
+  test_equals "$second" "two"
+}
+
+echo
 echo "=== Assignment Syntax (var = func) ==="
 
 test "basic assignment" {
@@ -2030,6 +2109,130 @@ test "multi semicolon assign a" {
 
 test "multi semicolon assign b" {
   test_equals "$line_b" "q"
+}
+
+test "semicolon with multiple spaces" {
+  array_clear _sc_multi_arr
+  array_add _sc_multi_arr "a";   array_add _sc_multi_arr "b";   array_add _sc_multi_arr "c"
+  array_len _sc_multi_arr
+  test_equals "$R" "3"
+}
+
+test "semicolon with multiple spaces values" {
+  array_get _sc_multi_arr 0; a="$R"
+  array_get _sc_multi_arr 1; b="$R"
+  array_get _sc_multi_arr 2; c="$R"
+  test_equals "$a$b$c" "abc"
+}
+
+test "inline if else fi" {
+  _x=5
+  if $_x < 10: _result="less"; else _result="greater"; fi
+  test_equals "$_result" "less"
+}
+
+test "inline if else fi other branch" {
+  _x=15
+  if $_x < 10: _result2="less"; else _result2="greater"; fi
+  test_equals "$_result2" "greater"
+}
+
+test "single line else colon" {
+  _x=15
+  if $_x < 10: _r="small"
+  else: _r="big"
+  test_equals "$_r" "big"
+}
+
+test "single line else colon if branch" {
+  _x=5
+  if $_x < 10: _r="small"
+  else: _r="big"
+  test_equals "$_r" "small"
+}
+
+test "if elif else colon chain" {
+  _z=2500
+  if $_z < 1800: _c="@"
+  elif $_z < 2200: _c="#"
+  elif $_z < 2600: _c="+"
+  elif $_z < 3000: _c="-"
+  else: _c="."
+  test_equals "$_c" "+"
+}
+
+test "if elif else colon chain first" {
+  _z=1000
+  if $_z < 1800: _c="@"
+  elif $_z < 2200: _c="#"
+  elif $_z < 2600: _c="+"
+  elif $_z < 3000: _c="-"
+  else: _c="."
+  test_equals "$_c" "@"
+}
+
+test "if elif else colon chain last" {
+  _z=5000
+  if $_z < 1800: _c="@"
+  elif $_z < 2200: _c="#"
+  elif $_z < 2600: _c="+"
+  elif $_z < 3000: _c="-"
+  else: _c="."
+  test_equals "$_c" "."
+}
+
+test "if elif else colon chain second" {
+  _z=2000
+  if $_z < 1800: _c="@"
+  elif $_z < 2200: _c="#"
+  elif $_z < 2600: _c="+"
+  elif $_z < 3000: _c="-"
+  else: _c="."
+  test_equals "$_c" "#"
+}
+
+test "if elif else colon chain fourth" {
+  _z=2800
+  if $_z < 1800: _c="@"
+  elif $_z < 2200: _c="#"
+  elif $_z < 2600: _c="+"
+  elif $_z < 3000: _c="-"
+  else: _c="."
+  test_equals "$_c" "-"
+}
+
+_test_depth_char() {
+  _tz=$1
+  if $_tz < 100: R="a"
+  elif $_tz < 200: R="b"
+  else: R="c"
+}
+
+test "single line if elif else in function" {
+  _test_depth_char 50; test_equals "$R" "a"
+}
+
+test "single line if elif else in function mid" {
+  _test_depth_char 150; test_equals "$R" "b"
+}
+
+test "single line if elif else in function last" {
+  _test_depth_char 250; test_equals "$R" "c"
+}
+
+test "else colon with complex body" {
+  _x=20
+  if $_x < 10: _a=1; _b=2
+  else: _a=3; _b=4
+  test_equals "$_a$_b" "34"
+}
+
+test "nested single line if after else colon" {
+  _x=20
+  _y=5
+  if $_x < 10: _r="x-small"
+  else: if $_y < 10: _r="y-small"; else _r="both-big"; fi
+  test_equals "$_r" "y-small"
 }
 
 test "map_get R capture" {
@@ -3775,6 +3978,26 @@ test "str_indent all whitespace" {
 test "str_indent does not capture middle spaces" {
   str_indent "  hello world"
   test_equals "$R" "  "
+}
+
+test "str_len basic" {
+  str_len "hello"
+  test_equals "$R" "5"
+}
+
+test "str_len empty" {
+  str_len ""
+  test_equals "$R" "0"
+}
+
+test "str_len with spaces" {
+  str_len "hello world"
+  test_equals "$R" "11"
+}
+
+test "str_len assignment" {
+  length = str_len "testing"
+  test_equals "$length" "7"
 }
 
 test "str_starts dollar sign" {

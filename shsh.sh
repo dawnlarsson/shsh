@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.62.0"
+VERSION="0.63.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -28,6 +28,9 @@ str_rtrim() { R=${1%"${1##*[![:space:]]}"}; }
 str_trim() { R=${1#"${1%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}; }
 str_indent() { R=${1%%[![:space:]]*}; }
 str_split_indent() { R=${1%%[![:space:]]*}; R2=${1#"$R"}; }
+str_len() { R=${#1}; }
+str_word() { _sw_s=${1#"${1%%[![:space:]]*}"}; _sw_n=$2
+while [ "$_sw_n" -gt 0 ]; do _sw_s=${_sw_s#*[[:space:]]}; _sw_s=${_sw_s#"${_sw_s%%[![:space:]]*}"}; _sw_n=$((_sw_n - 1)); done; R=${_sw_s%%[[:space:]]*}; }
 
 scan() {
   _sc_in=$1
@@ -101,7 +104,7 @@ default_unset() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1+x}\" ] &
 array_set() {
   case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac
   case "$2" in ""|*[!0-9]*) return 1;; esac
-  eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1))"
+  eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1)) || :"
 }
 array_get() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!0-9]*) return 1;; esac; eval "R=\"\${__shsh_${1}_$2}\"; [ -n \"\${__shsh_${1}_$2+x}\" ]"; }
 array_len() { _shsh_check_name "$1" || return 1; eval "R=\"\${__shsh_${1}_n:-0}\""; }
@@ -110,6 +113,16 @@ array_add() {
   _shsh_check_name "$1" || return 1
   eval "_aa_idx=\${__shsh_${1}_n:-0}"
   eval "__shsh_${1}_$_aa_idx=\"\$2\"; __shsh_${1}_n=$((_aa_idx + 1))"
+}
+
+array_init() {
+  _shsh_check_name "$1" || return 1
+  _ai_name=$1; shift; _ai_idx=0
+  for _ai_val in "$@"; do
+    eval "__shsh_${_ai_name}_$_ai_idx=\"\$_ai_val\""
+    _ai_idx=$((_ai_idx + 1))
+  done
+  eval "__shsh_${_ai_name}_n=$_ai_idx"
 }
 
 array_for() {
@@ -1131,7 +1144,7 @@ optimize_static() {
     _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"; _oac_val="$_oac_arg3"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     _oac_check_int "$_oac_idx" || _oac_fail || return 1
-    R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
+    R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1)) || :"
     return 0
     ;;
   "map_set "*)
@@ -1272,6 +1285,12 @@ optimize_static() {
     R="R=\${${_oac_varname}%%[![:space:]]*}; R2=\${${_oac_varname}#\"\$R\"}"
     return 0
     ;;
+  "str_len "*)
+    _oac_parse_1arg "str_len"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\${#${_oac_varname}}"
+    return 0
+    ;;
   "file_exists "*)
     _oac_parse_1arg "file_exists"
     _oac_path="$_oac_arg1"
@@ -1327,6 +1346,7 @@ transform_semicolon_parts() {
     esac
     _tsp_part="${_tsp_line%%; *}"
     _tsp_line="${_tsp_line#*"; "}"
+    _tsp_line="${_tsp_line#"${_tsp_line%%[![:space:]]*}"}"
     if ! optimize_static "$_tsp_part"; then
       transform_statement "$_tsp_part"
     fi
@@ -1371,10 +1391,16 @@ _parse_colon_syntax() {
 
 _strip_inline_end() {
   _has_inline_end=0
+  _needs_fi=0
   case $_pcs_body in
   *"; end")
     _pcs_body="${_pcs_body%"; end"}"
     _has_inline_end=1
+    _needs_fi=1
+    ;;
+  *"; fi")
+    _has_inline_end=1
+    _needs_fi=0
   ;;esac
 }
 
@@ -1646,16 +1672,23 @@ _handle_conditional() {
 
   if _parse_colon_syntax "$_hc_rest"; then
     _strip_inline_end
-    emit_condition "$_hc_kw" "$_pcs_cond" "$_hc_indent" "; $_hc_suffix"
-    emit_with_try_check "${_hc_indent}  " "${_pcs_body}"
-    if [ "$_hc_kw" = "while" ]; then
-      printf "${_hc_indent}done\n"
-      emit_try_break "$_hc_indent"
-    elif [ "$_has_inline_end" = 1 ]; then
-      printf "${_hc_indent}fi\n"
-    elif [ "$_hc_kw" = "if" ]; then
-      single_line_if_active=1
-      single_line_if_indent="$_hc_indent"
+    if [ "$_has_inline_end" = 1 ] && [ "$_needs_fi" = 0 ]; then
+      emit_single_condition "$_pcs_cond"
+      _hc_cond_part="$R"
+      transform_semicolon_parts "$_pcs_body"
+      printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_cond_part}; ${_hc_suffix} $R"
+    else
+      emit_condition "$_hc_kw" "$_pcs_cond" "$_hc_indent" "; $_hc_suffix"
+      emit_with_try_check "${_hc_indent}  " "${_pcs_body}"
+      if [ "$_hc_kw" = "while" ]; then
+        printf "${_hc_indent}done\n"
+        emit_try_break "$_hc_indent"
+      elif [ "$_needs_fi" = 1 ]; then
+        printf "${_hc_indent}fi\n"
+      elif [ "$_hc_kw" = "if" ]; then
+        single_line_if_active=1
+        single_line_if_indent="$_hc_indent"
+      fi
     fi
   else
     case $_hc_rest in

@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 689 tests.
+Passing 720 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -545,7 +545,12 @@ path="/usr/bin"      # string with special chars
 
 ### Creating and Modifying
 ```sh
-# Add elements
+# Initialize array with values
+array_init nums 10 20 30 40 50
+array_get nums 2              # R=30
+array_len nums                 # R=5
+
+# Add elements one at a time
 array_add fruits "apple"
 array_add fruits "banana"
 array_add fruits "cherry"
@@ -726,6 +731,26 @@ str_ltrim "  hello"                 # R="hello"
 str_rtrim "hello  "                 # R="hello"
 str_trim "  hello  "                # R="hello"
 str_indent "    code"               # R="    " (leading whitespace only)
+```
+
+### Length
+```sh
+str_len "hello"                     # R=5
+str_len ""                          # R=0
+str_len "hello world"               # R=11
+
+length = str_len "$input"
+```
+
+### Word Extraction
+```sh
+str_word "apple banana cherry" 0    # R="apple"
+str_word "apple banana cherry" 1    # R="banana"
+str_word "apple banana cherry" 2    # R="cherry"
+
+# With assignment capture:
+second = str_word "one two three" 1
+echo "$second"                      # two
 ```
 
 ### scan (Pattern Capture)
