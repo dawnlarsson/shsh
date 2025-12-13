@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.55.0"
+VERSION="0.56.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -885,7 +885,6 @@ _oac_parse_3args() {
 optimize_static() {
   _oac_stmt="$1"
   case $_oac_stmt in
-
   "array_get "*)
     _oac_parse_2args "array_get"
     _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"
@@ -893,7 +892,6 @@ optimize_static() {
     _oac_check_int "$_oac_idx" || _oac_fail || return 1
     R="R=\${__shsh_${_oac_name}_${_oac_idx}}; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
     return 0
-
     ;;
   "map_get "*)
     _oac_parse_2args "map_get"
@@ -903,7 +901,6 @@ optimize_static() {
     _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="R=\${__shsh_map_${_oac_name}_${_oac_key}}"
     return 0
-
     ;;
   "map_has "*)
     _oac_parse_2args "map_has"
@@ -913,7 +910,6 @@ optimize_static() {
     _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="[ \"\${__shsh_map_${_oac_name}_${_oac_key}+x}\" ]"
     return 0
-
     ;;
   "array_len "*)
     _oac_parse_1arg "array_len"
@@ -921,7 +917,6 @@ optimize_static() {
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="R=\${__shsh_${_oac_name}_n:-0}"
     return 0
-
     ;;
   "array_set "*)
     _oac_parse_3args "array_set"
@@ -930,7 +925,6 @@ optimize_static() {
     _oac_check_int "$_oac_idx" || _oac_fail || return 1
     R="__shsh_${_oac_name}_${_oac_idx}=${_oac_val}; [ ${_oac_idx} -ge \${__shsh_${_oac_name}_n:-0} ] && __shsh_${_oac_name}_n=\$((${_oac_idx} + 1))"
     return 0
-
     ;;
   "map_set "*)
     _oac_parse_3args "map_set"
@@ -940,7 +934,6 @@ optimize_static() {
     _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="__shsh_map_${_oac_name}_${_oac_key}=${_oac_val}; [ \"\${__shsh_map_${_oac_name}_${_oac_key}__exists}\" ] || { __shsh_map_${_oac_name}_${_oac_key}__exists=1; _ms_i=\${__shsh_mapkeys_${_oac_name}_n:-0}; eval \"__shsh_mapkeys_${_oac_name}_\$_ms_i=\\\"${_oac_key}\\\"\"; __shsh_mapkeys_${_oac_name}_n=\$((_ms_i + 1)); }"
     return 0
-
     ;;
   "map_delete "*)
     _oac_parse_2args "map_delete"
@@ -950,7 +943,6 @@ optimize_static() {
     _oac_check_name "$_oac_key" || _oac_fail || return 1
     R="unset __shsh_map_${_oac_name}_${_oac_key}"
     return 0
-
     ;;
   "array_clear "*)
     _oac_parse_1arg "array_clear"
@@ -958,23 +950,19 @@ optimize_static() {
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="__shsh_${_oac_name}_n=0"
     return 0
-
     ;;
   "array_add "*)
     _oac_parse_2args "array_add"
     _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
-
     if _oac_unquote "$_oac_val"; then
       case $R in
       *'"'*|*"'"*|*'\\'*)_oac_fail; return 1;;
       esac
       _oac_val="$R"
     fi
-
     R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
     return 0
-
     ;;
   "str_before "*)
     _oac_parse_2args "str_before"
@@ -985,7 +973,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}%%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
-
     ;;
   "str_before_last "*)
     _oac_parse_2args "str_before_last"
@@ -996,7 +983,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
-
     ;;
   "str_after "*)
     _oac_parse_2args "str_after"
@@ -1007,7 +993,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}#*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
-
     ;;
   "str_after_last "*)
     _oac_parse_2args "str_after_last"
@@ -1018,7 +1003,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}##*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
-
     ;;
   "str_contains "*)
     _oac_parse_2args "str_contains"
@@ -1029,7 +1013,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\"*) ;; *) false;; esac"
     return 0
-
     ;;
   "str_starts "*)
     _oac_parse_2args "str_starts"
@@ -1040,7 +1023,6 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in \"${_oac_delim}\"*) ;; *) false;; esac"
     return 0
-
     ;;
   "str_ends "*)
     _oac_parse_2args "str_ends"
@@ -1051,70 +1033,60 @@ optimize_static() {
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\") ;; *) false;; esac"
     return 0
-
     ;;
   "str_trim "*)
     _oac_parse_1arg "str_trim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}; R=\${R%\"\${R##*[![:space:]]}\"}"
     return 0
-
     ;;
   "str_ltrim "*)
     _oac_parse_1arg "str_ltrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}"
     return 0
-
     ;;
   "str_rtrim "*)
     _oac_parse_1arg "str_rtrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}"
     return 0
-
     ;;
   "str_indent "*)
     _oac_parse_1arg "str_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}%%[![:space:]]*}"
     return 0
-
     ;;
   "str_split_indent "*)
     _oac_parse_1arg "str_split_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\${${_oac_varname}%%[![:space:]]*}; R2=\${${_oac_varname}#\"\$R\"}"
     return 0
-
     ;;
   "file_exists "*)
     _oac_parse_1arg "file_exists"
     _oac_path="$_oac_arg1"
     R="[ -f ${_oac_path} ]"
     return 0
-
     ;;
   "dir_exists "*)
     _oac_parse_1arg "dir_exists"
     _oac_path="$_oac_arg1"
     R="[ -d ${_oac_path} ]"
     return 0
-
     ;;
   "file_executable "*)
     _oac_parse_1arg "file_executable"
     _oac_path="$_oac_arg1"
     R="[ -x ${_oac_path} ]"
     return 0
-
     ;;
   "path_writable "*)
     _oac_parse_1arg "path_writable"
     _oac_path="$_oac_arg1"
     R="[ -w ${_oac_path} ]"
     return 0
-
     ;;
   "default "*)
     _oac_parse_2args "default"
@@ -1122,7 +1094,6 @@ optimize_static() {
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="[ -z \"\${${_oac_name}}\" ] && ${_oac_name}=${_oac_val}"
     return 0
-
     ;;
   "default_unset "*)
     _oac_parse_2args "default_unset"
@@ -1130,7 +1101,6 @@ optimize_static() {
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="[ -z \"\${${_oac_name}+x}\" ] && ${_oac_name}=${_oac_val}"
     return 0
-
     ;;
   *)R="$_oac_stmt"; return 1;;
   esac
@@ -1585,11 +1555,14 @@ transform_line() {
   _try_op_split "&&" if || _try_op_split "&&" while || _try_op_split "||" if
 
   case $stripped in
-
-  "")printf '\n';;
-
+  "")
+    peek
+    case $R in
+    s|S)return;;
+    *)printf '\n';;
+    esac
+    ;;
   "#"*)printf '%s\n' "$line";;
-
   "end")
     peek
     case $R in
@@ -1602,7 +1575,6 @@ transform_line() {
     t)printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec;;
     esac
     pop
-
     ;;
   "done")
     printf "${indent}done\n"
@@ -1611,11 +1583,13 @@ transform_line() {
     if [ "$R" = "f" ] || [ "$R" = "w" ]; then
       pop
     fi
-
     ;;
   "else")
     printf "${indent}else\n"
-
+    ;;
+  "elif "*)
+    R=${stripped#*"elif "}; [ "$R" != "$stripped" ]
+    _handle_conditional "elif" "$R" "$indent" "then" ""
     ;;
   "else:"*|"default:"*)
     if case "$stripped" in "else:"*) ;; *) false;; esac; then
@@ -1645,13 +1619,11 @@ transform_line() {
         printf "${indent}*)\n"
       fi
     fi
-
     ;;
   "try")
     try_depth_inc
     printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
     push t
-
     ;;
   "catch")
     peek
@@ -1662,22 +1634,14 @@ transform_line() {
     else
       printf '%s\n' "$line"
     fi
-
     ;;
   "if "*)
     R=${stripped#*"if "}; [ "$R" != "$stripped" ]
     _handle_conditional "if" "$R" "$indent" "then" "i"
-
-    ;;
-  "elif "*)
-    R=${stripped#*"elif "}; [ "$R" != "$stripped" ]
-    _handle_conditional "elif" "$R" "$indent" "then" ""
-
     ;;
   "while "*)
     R=${stripped#*"while "}; [ "$R" != "$stripped" ]
     _handle_conditional "while" "$R" "$indent" "do" ""
-
     ;;
   "for "*)
     R=${stripped#*"for "}; [ "$R" != "$stripped" ]; _for_rest="$R"
@@ -1693,13 +1657,11 @@ transform_line() {
       printf "${indent}${stripped}; do\n"
       push f
     fi
-
     ;;
   "switch "*)
     R=${stripped#*"switch "}; [ "$R" != "$stripped" ]
     printf "${indent}case $R in\n"
     push s
-
     ;;
   "case "*)
     peek
@@ -1734,7 +1696,6 @@ transform_line() {
     *)
       printf '%s\n' "$line"
     ;;esac
-
     ;;
   "default")
     peek
@@ -1749,7 +1710,6 @@ transform_line() {
     *)
       printf '%s\n' "$line"
     ;;esac
-
     ;;
   "test "*" {"*)
     R=${stripped#*"test "}; [ "$R" != "$stripped" ]
@@ -1760,7 +1720,6 @@ transform_line() {
     _test_name="${_test_name%\'}"
     printf "${indent}test_start '%s'\n" "$_test_name"
     push T
-
     ;;
   "}")
     peek
@@ -1770,15 +1729,12 @@ transform_line() {
     else
       printf '%s\n' "$line"
     fi
-
     ;;
   *"++"*|*"--"*|*" += "*|*" -= "*|*" *= "*|*" /= "*|*" %= "*)
     transform_semicolon_parts "$stripped"
     printf '%s\n' "${indent}$R"
-
     ;;
   *)emit_with_try_check "$line";;
-
   esac
 }
 
@@ -2052,7 +2008,6 @@ case $1 in
     _old_ver="$VERSION"
     _dest=""
     _needs_path=0
-
     if [ "$_is_update" = 1 ]; then
       for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
         if [ -x "$_try_loc" ]; then
@@ -2061,7 +2016,6 @@ case $1 in
         fi
       done
     fi
-
     if [ -z "$_dest" ]; then
       for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
         case ":$PATH:" in
@@ -2082,12 +2036,10 @@ case $1 in
         _needs_path=1
       fi
     fi
-
     _dest_dir=$(dirname "$_dest")
     if ! [ -d "$_dest_dir" ]; then
       mkdir -p "$_dest_dir" 2>/dev/null || sudo mkdir -p "$_dest_dir"
     fi
-
     _src=""
     if [ "$_is_update" = 1 ]; then
       printf "downloading shsh from github...\n"
@@ -2115,14 +2067,12 @@ case $1 in
     else
       _src="$0"
     fi
-
     _verb="installed"
     _copy_cmd="cp"
     if [ "$_is_update" = 1 ]; then
       _verb="updated"
       _copy_cmd="mv"
     fi
-
     if $_copy_cmd "$_src" "$_dest" 2>/dev/null && chmod +x "$_dest" 2>/dev/null; then
       printf "%s: %s\n" "$_verb" "$_dest"
     else
@@ -2131,7 +2081,6 @@ case $1 in
       sudo chown "$USER" "$_dest"
       printf "%s: %s\n" "$_verb" "$_dest"
     fi
-
     if [ "$_is_update" = 1 ]; then
       _new_ver=$("$_dest" -v 2>/dev/null | sed 's/shsh //')
       if [ "$_new_ver" = "$_old_ver" ]; then
@@ -2140,7 +2089,6 @@ case $1 in
         printf "version: %s -> %s\n" "$_old_ver" "$_new_ver"
       fi
     fi
-
     if [ "$_needs_path" = 1 ] && [ "$_is_update" = 0 ]; then
       _shell_rc=""
       _path_export='export PATH="$HOME/.local/bin:$PATH"'

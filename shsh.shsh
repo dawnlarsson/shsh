@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.55.0"
+VERSION="0.56.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -761,7 +761,6 @@ peek() { R="${block_stack#"${block_stack%?}"}"; }
 switch_mark_used() { block_stack="${block_stack%?}S"; }
 switch_mark_closed() { block_stack="${block_stack%?}s"; }
 
-# Check if a statement is simple (no control structures that need multiple lines)
 _is_simple_stmt() {
   switch $1
   case "if "*|"while "*|"for "*|"switch "*|"try"|"test "*: return 1
@@ -1537,7 +1536,12 @@ transform_line() {
   
   switch $stripped
   
-  case "": printf '\n'
+  case ""
+    peek
+    switch $R
+    case s|S: return
+    default: printf '\n'
+    end
   
   case "#"*: printf '%s\n' "$line"
   
@@ -1561,6 +1565,10 @@ transform_line() {
   
   case "else"
     printf "${indent}else\n"
+  
+  case "elif "*
+    str_after "$stripped" "elif "
+    _handle_conditional "elif" "$R" "$indent" "then" ""
   
   case "else:"*|"default:"*
     if str_starts "$stripped" "else:"
@@ -1605,10 +1613,6 @@ transform_line() {
   case "if "*
     str_after "$stripped" "if "
     _handle_conditional "if" "$R" "$indent" "then" "i"
-  
-  case "elif "*
-    str_after "$stripped" "elif "
-    _handle_conditional "elif" "$R" "$indent" "then" ""
   
   case "while "*
     str_after "$stripped" "while "
