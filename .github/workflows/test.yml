@@ -1,0 +1,16 @@
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test-alpine:
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    steps:
+      - name: Install dependencies
+        run: apk add --no-cache git
+
+      - uses: actions/checkout@v3
+
+      - name: Run Tests (Ash)
+        run: ./shsh.sh repo/test.sh
