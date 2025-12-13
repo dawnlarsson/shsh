@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.59.0"
+VERSION="0.60.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1752,7 +1752,8 @@ transform_line() {
     line="${indent}${stripped}"
   end
   
-  _close_single_line_if "$indent" "$stripped"
+  # Only check single-line-if closure if one is active
+  if $single_line_if_active == 1: _close_single_line_if "$indent" "$stripped"
 
   switch $stripped
   case "#"*
@@ -1763,13 +1764,21 @@ transform_line() {
     return
   end
 
-  _try_semi_split while && return
-  _try_semi_split if && return
-  _try_semi_split for && return
+  # Only check semi-splits if line contains "; "
+  switch $stripped
+  case *"; "*
+    _try_semi_split while && return
+    _try_semi_split if && return
+    _try_semi_split for && return
+  end
 
   _emit_prefix=""
-  _try_op_split "|" while || _try_op_split "|" if || _try_op_split "|" for || \
-  _try_op_split "&&" if || _try_op_split "&&" while || _try_op_split "||" if
+  # Only check op-splits if line contains " | " or " && " or " || "
+  switch $stripped
+  case *" | "*|*" && "*|*" || "*
+    _try_op_split "|" while || _try_op_split "|" if || _try_op_split "|" for || \
+    _try_op_split "&&" if || _try_op_split "&&" while || _try_op_split "||" if
+  end
   
   switch $stripped
   
@@ -1893,16 +1902,16 @@ transform_line() {
       _strip_inline_end
       printf '%s\n' "${indent}for ${_pcs_cond}; do"
       emit_with_try_check "${indent}  " "${_pcs_body}"
-      printf "${indent}done\n"
+      printf '%s\n' "${indent}done"
       emit_try_break "$indent"
     else
-      printf "${indent}${stripped}; do\n"
+      printf '%s\n' "${indent}${stripped}; do"
       push f
     end
   
   case "switch "*
     str_after "$stripped" "switch "
-    printf "${indent}case $R in\n"
+    printf '%s\n' "${indent}case $R in"
     push s
   
   case "case "*
@@ -2147,7 +2156,7 @@ emit_runtime() {
     case 0
       if str_starts "$_er_line" "# __RUNTIME_START__"
         _er_emit=1
-        printf "$_er_line\n"
+        printf '%s\n' "$_er_line"
       end
     case 1
       printf '%s\n' "$_er_line"
@@ -2172,7 +2181,7 @@ switch $1
       _es_code="$(transform < "$2")"
     end
     emit_runtime_stripped "$_es_code"
-    printf "$_es_code\n"
+    printf '%s\n' "$_es_code"
   case build_full
     printf '#!/bin/sh\n'
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'

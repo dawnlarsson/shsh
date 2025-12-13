@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.59.0"
+VERSION="0.60.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -553,7 +553,7 @@ bit_128() {
 file_hash() {
   path="$1"
 
-  if ! [ -f "$path" ]; then
+  if ! file_exists "$path"; then
     return 1
   fi
 
@@ -599,7 +599,7 @@ tmp_file() {
     name="shsh_$$_${_shsh_tmp_counter}.tmp"
     path="$base/$name"
 
-    if ! [ -f "$path" ]; then
+    if ! file_exists "$path"; then
       : > "$path" || return 1
       R="$path"
       return 0
@@ -1078,7 +1078,7 @@ _oac_parse_3args() {
 
 optimize_static() {
   _oac_stmt="$1"
-  case ${_oac_stmt% *} in
+  case ${_oac_stmt%% *} in
   array_*|map_*|str_*|default*)
     ;;
   *)R="$_oac_stmt"; return 1;;
@@ -1741,7 +1741,9 @@ transform_line() {
     line="${indent}${stripped}"
   fi
 
-  _close_single_line_if "$indent" "$stripped"
+  if [ "$single_line_if_active" = 1 ]; then
+    _close_single_line_if "$indent" "$stripped"
+  fi
 
   case $stripped in
   "#"*)
@@ -1752,13 +1754,19 @@ transform_line() {
     return
   ;;esac
 
-  _try_semi_split while && return
-  _try_semi_split if && return
-  _try_semi_split for && return
+  case $stripped in
+  *"; "*)
+    _try_semi_split while && return
+    _try_semi_split if && return
+    _try_semi_split for && return
+  ;;esac
 
   _emit_prefix=""
-  _try_op_split "|" while || _try_op_split "|" if || _try_op_split "|" for || \
-  _try_op_split "&&" if || _try_op_split "&&" while || _try_op_split "||" if
+  case $stripped in
+  *" | "*|*" && "*|*" || "*)
+    _try_op_split "|" while || _try_op_split "|" if || _try_op_split "|" for || \
+    _try_op_split "&&" if || _try_op_split "&&" while || _try_op_split "||" if
+  ;;esac
 
   case $stripped in
   "")
@@ -1880,16 +1888,16 @@ transform_line() {
       _strip_inline_end
       printf '%s\n' "${indent}for ${_pcs_cond}; do"
       emit_with_try_check "${indent}  " "${_pcs_body}"
-      printf "${indent}done\n"
+      printf '%s\n' "${indent}done"
       emit_try_break "$indent"
     else
-      printf "${indent}${stripped}; do\n"
+      printf '%s\n' "${indent}${stripped}; do"
       push f
     fi
     ;;
   "switch "*)
     R=${stripped#*"switch "}; [ "$R" != "$stripped" ]
-    printf "${indent}case $R in\n"
+    printf '%s\n' "${indent}case $R in"
     push s
     ;;
   "case "*)
@@ -1995,7 +2003,7 @@ transform() {
   fi
 }
 
-if [ -f "$1" ]; then
+if file_exists "$1"; then
   script="$1"
   _shsh_file="$script"
   shift
@@ -2160,7 +2168,7 @@ emit_runtime() {
     0)
       if case "$_er_line" in "# __RUNTIME_START__"*) ;; *) false;; esac; then
         _er_emit=1
-        printf "$_er_line\n"
+        printf '%s\n' "$_er_line"
       fi
       ;;
     1)
@@ -2191,7 +2199,7 @@ case $1 in
       _es_code="$(transform < "$2")"
     fi
     emit_runtime_stripped "$_es_code"
-    printf "$_es_code\n"
+    printf '%s\n' "$_es_code"
     ;;
   build_full)
     printf '#!/bin/sh\n'
@@ -2251,7 +2259,7 @@ case $1 in
     _needs_path=0
     if [ "$_is_update" = 1 ]; then
       for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
-        if [ -x "$_try_loc" ]; then
+        if file_executable "$_try_loc"; then
           _dest="$_try_loc"
           break
         fi
@@ -2261,7 +2269,7 @@ case $1 in
       for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
         case ":$PATH:" in
           *":$_try_dir:"*)
-            if [ -w "$_try_dir" ]; then
+            if path_writable "$_try_dir"; then
               _dest="$_try_dir/shsh"
               break
             elif [ "$_try_dir" = "/usr/local/bin" ]; then
@@ -2278,7 +2286,7 @@ case $1 in
       fi
     fi
     _dest_dir=$(dirname "$_dest")
-    if ! [ -d "$_dest_dir" ]; then
+    if ! dir_exists "$_dest_dir"; then
       mkdir -p "$_dest_dir" 2>/dev/null || sudo mkdir -p "$_dest_dir"
     fi
     _src=""
@@ -2336,9 +2344,9 @@ case $1 in
 
       case $SHELL in
         */bash)
-          if [ -f "$HOME/.bash_profile" ]; then
+          if file_exists "$HOME/.bash_profile"; then
             _shell_rc="$HOME/.bash_profile"
-          elif [ -f "$HOME/.bash_login" ]; then
+          elif file_exists "$HOME/.bash_login"; then
             _shell_rc="$HOME/.bash_login"
           else
             _shell_rc="$HOME/.bashrc"
@@ -2353,7 +2361,7 @@ case $1 in
       esac
 
       _already_configured=0
-      if [ -f "$_shell_rc" ]; then
+      if file_exists "$_shell_rc"; then
         if grep -qE '(\.local/bin|HOME/.local/bin)' "$_shell_rc" 2>/dev/null; then
           _already_configured=1
         fi
@@ -2377,9 +2385,9 @@ case $1 in
   uninstall)
     _found=0
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
-      if [ -f "$loc" ]; then
+      if file_exists "$loc"; then
         _found=1
-        if [ -w "$(dirname "$loc")" ]; then
+        if path_writable "$(dirname "$loc")"; then
           rm "$loc" && printf "removed: %s\n" "$loc"
         else
           printf "removing %s (requires sudo)...\n" "$loc"
