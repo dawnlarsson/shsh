@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.61.0"
+VERSION="0.62.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -860,6 +860,18 @@ _transform_module_call() {
   R="$_tmc_out$_tmc_rest"
 }
 
+_is_func_def() {
+  case $1 in
+  *"() {"*|*"(){"*)return 0;;
+  esac
+  _ifd_rest="${1#*"()"}"
+  _ifd_trimmed="${_ifd_rest#"${_ifd_rest%%[![:space:]]*}"}"
+  case $_ifd_trimmed in
+  "{"*)return 0;;
+  esac
+  return 1
+}
+
 _transform_module_file() {
   _tmf_path="$1"
   _tmf_module="$2"
@@ -869,18 +881,16 @@ _transform_module_file() {
   while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]; do
     _tmf_content="$_tmf_content$_tmf_line
 "
-    case $_tmf_line in
-    *"() {"*)
+    if _is_func_def "$_tmf_line"; then
       R=${_tmf_line#"${_tmf_line%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}
       _tmf_trimmed="$R"
       R=${_tmf_trimmed%%"()"*}; [ "$R" != "$_tmf_trimmed" ]
       _tmf_funcs="$_tmf_funcs $R "
-    ;;esac
+    fi
   done
 
 printf '%s' "$_tmf_content" |   while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]; do
-    case $_tmf_line in
-    *"() {"*)
+    if _is_func_def "$_tmf_line"; then
       R=${_tmf_line#"${_tmf_line%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}
       _tmf_trimmed="$R"
       R=${_tmf_trimmed%%"()"*}; [ "$R" != "$_tmf_trimmed" ]
@@ -888,8 +898,7 @@ printf '%s' "$_tmf_content" |   while IFS= read -r _tmf_line || [ -n "$_tmf_line
       R=${_tmf_trimmed#*"()"}; [ "$R" != "$_tmf_trimmed" ]
       _tmf_rest="$R"
       _tmf_line="${_tmf_module}_${_tmf_fname}()$_tmf_rest"
-      ;;
-    *)
+    else
       for _tmf_fn in $_tmf_funcs; do
         _tmf_new_line=""
         _tmf_remain="$_tmf_line"
@@ -920,7 +929,7 @@ printf '%s' "$_tmf_content" |   while IFS= read -r _tmf_line || [ -n "$_tmf_line
         done
         _tmf_line="$_tmf_new_line$_tmf_remain"
       done
-    ;;esac
+    fi
     printf '%s\n' "$_tmf_line"
   done
 }
@@ -1652,11 +1661,25 @@ _handle_conditional() {
     case $_hc_rest in
     *"; $_hc_suffix"*)
       printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
-      if [ -n "$_hc_push" ]; then
-        push "$_hc_push"
+      _hc_complete=0
+      if [ "$_hc_kw" = "while" ] || [ "$_hc_kw" = "for" ]; then
+        case $_hc_rest in
+        *"; done"|*"; done;"*|*"; done "*)_hc_complete=1;;
+        *";done"|*";done;"*|*";done "*)_hc_complete=1;;
+        esac
+      elif [ "$_hc_kw" = "if" ]; then
+        case $_hc_rest in
+        *"; fi"|*"; fi;"*|*"; fi "*)_hc_complete=1;;
+        *";fi"|*";fi;"*|*";fi "*)_hc_complete=1;;
+        esac
       fi
-      if [ "$_hc_kw" = "while" ]; then
-        push w
+      if [ "$_hc_complete" = "0" ]; then
+        if [ -n "$_hc_push" ]; then
+          push "$_hc_push"
+        fi
+        if [ "$_hc_kw" = "while" ]; then
+          push w
+        fi
       fi
       ;;
     *)
@@ -1813,8 +1836,8 @@ transform_line() {
       pop
     fi
     ;;
-  "done")
-    printf "${indent}done\n"
+  "done"|"done "*)
+    printf '%s\n' "${indent}${stripped}"
     emit_try_break "$indent"
     peek
     if [ "$R" = "f" ] || [ "$R" = "w" ]; then

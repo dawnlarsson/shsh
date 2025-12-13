@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.61.0"
+VERSION="0.62.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -894,6 +894,19 @@ _transform_module_call() {
 
 # Module system: Transform a module file (prefix all functions with module name)
 # This does two passes: first collect function names, then transform calls and definitions
+_is_func_def() {
+  switch $1
+  case *"() {"*|*"(){"*: return 0
+  end
+  # Check for () followed by spaces/tabs then {
+  _ifd_rest="${1#*"()"}"
+  _ifd_trimmed="${_ifd_rest#"${_ifd_rest%%[![:space:]]*}"}"
+  switch $_ifd_trimmed
+  case "{"*: return 0
+  end
+  return 1
+}
+
 _transform_module_file() {
   _tmf_path="$1"
   _tmf_module="$2"
@@ -904,8 +917,7 @@ _transform_module_file() {
   while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]
     _tmf_content="$_tmf_content$_tmf_line
 "
-    switch $_tmf_line
-    case *"() {"*
+    if _is_func_def "$_tmf_line"
       str_trim "$_tmf_line"
       _tmf_trimmed="$R"
       str_before "$_tmf_trimmed" "()"
@@ -916,8 +928,7 @@ _transform_module_file() {
   # Second pass: output with transformations
   printf '%s' "$_tmf_content" | while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]
     # Check if this is a function definition
-    switch $_tmf_line
-    case *"() {"*
+    if _is_func_def "$_tmf_line"
       str_trim "$_tmf_line"
       _tmf_trimmed="$R"
       str_before "$_tmf_trimmed" "()"
@@ -926,7 +937,7 @@ _transform_module_file() {
       _tmf_rest="$R"
       # Prefix with module name
       _tmf_line="${_tmf_module}_${_tmf_fname}()$_tmf_rest"
-    default
+    else
       # Transform internal function calls
       for _tmf_fn in $_tmf_funcs
         # Replace standalone function calls (at beginning of line or after certain chars)
@@ -1677,8 +1688,22 @@ _handle_conditional() {
     switch $_hc_rest
     case *"; $_hc_suffix"*
       printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
-      if "$_hc_push" != "": push "$_hc_push"
-      if "$_hc_kw" == "while": push w
+      _hc_complete=0
+      if "$_hc_kw" == "while" || "$_hc_kw" == "for"
+        switch $_hc_rest
+        case *"; done"|*"; done;"*|*"; done "*: _hc_complete=1
+        case *";done"|*";done;"*|*";done "*: _hc_complete=1
+        end
+      elif "$_hc_kw" == "if"
+        switch $_hc_rest
+        case *"; fi"|*"; fi;"*|*"; fi "*: _hc_complete=1
+        case *";fi"|*";fi;"*|*";fi "*: _hc_complete=1
+        end
+      end
+      if [ "$_hc_complete" = "0" ]
+        if "$_hc_push" != "": push "$_hc_push"
+        if "$_hc_kw" == "while": push w
+      end
     default
       emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
       if "$_hc_push" != "": push "$_hc_push"
@@ -1834,8 +1859,8 @@ transform_line() {
       pop
     end
   
-  case "done"
-    printf "${indent}done\n"
+  case "done"|"done "*
+    printf '%s\n' "${indent}${stripped}"
     emit_try_break "$indent"
     peek; if "$R" == "f" || "$R" == "w": pop
   
