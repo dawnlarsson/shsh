@@ -2777,7 +2777,9 @@ test "path_writable current dir" {
 }
 
 test "path_writable protected path" {
-  if path_writable "/root"
+  if "$(id -u)" == "0"
+    test_pass
+  elif path_writable "/root"
     test_fail "should not be writable"
   else
     test_pass
