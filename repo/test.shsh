@@ -6029,6 +6029,41 @@ test "chained inline statements" {
   test_equals "$_cis" "5"
 }
 
+echo
+echo "=== Modules ==="
+
+use repo/testmodule.shsh
+
+test "module basic function" {
+  testmodule.double 5
+  test_equals "$R" "10"
+}
+
+test "module another function" {
+  testmodule.triple 4
+  test_equals "$R" "12"
+}
+
+test "module function with string arg" {
+  testmodule.greet "World"
+  test_equals "$R" "Hello, World!"
+}
+
+test "module function with no arg" {
+  testmodule.greet
+  test_equals "$R" "Hello!"
+}
+
+test "module internal call transformation" {
+  testmodule.uses_internal
+  test_equals "$R" "used: helper"
+}
+
+test "module chained internal calls" {
+  testmodule.chain_c
+  test_equals "$R" "abc"
+}
+
 
 # Nested inline control structures are not yet supported
 # test "inline for with break simulation" {

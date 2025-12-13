@@ -1,3 +1,734 @@
+#!/bin/sh
+if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi
+# __RUNTIME_START__
+_shsh_sq="'"
+_shsh_dq='"'
+
+_shsh_sane() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
+
+_shsh_check_name() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
+_shsh_check_int() { case "$1" in ""|*[!0-9]*) return 1;; esac; }
+str_starts() { case "$1" in "$2"*);; *) return 1;; esac; }
+str_ends() { case "$1" in *"$2");; *) return 1;; esac; }
+str_contains() { case "$1" in *"$2"*);; *) return 1;; esac; }
+str_after() { R=${1#*"$2"}; [ "$R" != "$1" ]; }
+str_before() { R=${1%%"$2"*}; [ "$R" != "$1" ]; }
+str_after_last() { R=${1##*"$2"}; [ "$R" != "$1" ]; }
+str_before_last() { R=${1%"$2"*}; [ "$R" != "$1" ]; }
+str_ltrim() { R=${1#"${1%%[![:space:]]*}"}; }
+str_rtrim() { R=${1%"${1##*[![:space:]]}"}; }
+str_trim() { R=${1#"${1%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}; }
+str_indent() { R=${1%%[![:space:]]*}; }
+str_split_indent() { R=${1%%[![:space:]]*}; R2=${1#"$R"}; }
+
+scan() {
+  _sc_in=$1
+  _sc_pat=$2
+
+  while :; do
+    case $_sc_pat in
+      '') return 0 ;;
+    esac
+
+    _sc_lit=${_sc_pat%%\%*}
+    if [ -n "$_sc_lit" ]; then
+      case $_sc_in in
+        "$_sc_lit"*)
+          _sc_in=${_sc_in#"$_sc_lit"}
+          _sc_pat=${_sc_pat#"$_sc_lit"}
+          ;;
+        *) return 1 ;;
+      esac
+      [ -n "$_sc_pat" ] || return 0
+    fi
+
+    case $_sc_pat in
+      %*) _sc_pat=${_sc_pat#\%} ;;
+      *)  return 1 ;;
+    esac
+
+    _sc_var=${_sc_pat%%[!A-Za-z0-9_]*}
+    case $_sc_var in
+      ''|[!A-Za-z_]* ) return 1 ;;
+    esac
+    _sc_pat=${_sc_pat#"$_sc_var"}
+
+    if [ -z "$_sc_pat" ]; then
+      eval "$_sc_var=\"\$_sc_in\""
+      return 0
+    fi
+
+    _sc_next_lit=${_sc_pat%%\%*}
+
+    if [ -z "$_sc_next_lit" ]; then
+      eval "$_sc_var=\"\""
+      continue
+    fi
+
+    _sc_val=${_sc_in%%"$_sc_next_lit"*}
+    [ "$_sc_val" = "$_sc_in" ] && return 1
+
+    eval "$_sc_var=\"\$_sc_val\""
+
+    _sc_in=${_sc_in#*"$_sc_next_lit"}
+    _sc_pat=${_sc_pat#"$_sc_next_lit"}
+  done
+}
+
+_in_quotes() {
+  _iq_q="$1"
+  while :; do
+    case "$_iq_q" in *'"'*|*"'"*) ;; *) return 1 ;; esac
+    _iq_p="${_iq_q%%\'*}"
+    case "$_iq_p" in
+      *'"'*) _iq_q="${_iq_q#*'"'}"; case "$_iq_q" in *'"'*) _iq_q="${_iq_q#*'"'}" ;; *) return 0 ;; esac ;;
+      *) _iq_q="${_iq_q#*\'}"; case "$_iq_q" in *\'*) _iq_q="${_iq_q#*\'}" ;; *) return 0 ;; esac ;;
+    esac
+  done
+}
+
+default() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1}\" ] && $1=\"\$2\""; }
+default_unset() { _shsh_check_name "$1" || return 1; eval "[ -z \"\${$1+x}\" ] && $1=\"\$2\""; }
+
+array_set() {
+  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac
+  case "$2" in ""|*[!0-9]*) return 1;; esac
+  eval "__shsh_${1}_$2=\"\$3\"; [ $2 -ge \${__shsh_${1}_n:-0} ] && __shsh_${1}_n=$(($2 + 1))"
+}
+array_get() { case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac; case "$2" in ""|*[!0-9]*) return 1;; esac; eval "R=\"\${__shsh_${1}_$2}\"; [ -n \"\${__shsh_${1}_$2+x}\" ]"; }
+array_len() { _shsh_check_name "$1" || return 1; eval "R=\"\${__shsh_${1}_n:-0}\""; }
+
+array_add() {
+  _shsh_check_name "$1" || return 1
+  eval "_aa_idx=\${__shsh_${1}_n:-0}"
+  eval "__shsh_${1}_$_aa_idx=\"\$2\"; __shsh_${1}_n=$((_aa_idx + 1))"
+}
+
+array_for() {
+  case "$1" in ""|*[!a-zA-Z0-9_]*) return 1;; esac
+  _af_d=${_af_d:--1}; _af_d=$((_af_d + 1))
+  eval "_af_len_$_af_d=\"\${__shsh_${1}_n:-0}\"; _af_i_$_af_d=0"
+
+  while eval "[ \$(( \$_af_i_$_af_d + 4 )) -le \$_af_len_$_af_d ]"; do
+    eval "_idx=\$_af_i_$_af_d"
+    eval "R0=\"\${__shsh_${1}_$((_idx))}\"; \
+          R1=\"\${__shsh_${1}_$((_idx+1))}\"; \
+          R2=\"\${__shsh_${1}_$((_idx+2))}\"; \
+          R3=\"\${__shsh_${1}_$((_idx+3))}\""
+
+    R="$R0"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R1"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R2"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    R="$R3"; "$2" || { _af_d=$((_af_d - 1)); return 0; }
+
+    eval "_af_i_$_af_d=\$((\$_af_i_$_af_d + 4))"
+  done
+
+  while eval "[ \$_af_i_$_af_d -lt \$_af_len_$_af_d ]"; do
+    eval "_af_idx=\$_af_i_$_af_d"
+    eval "R=\"\${__shsh_${1}_$_af_idx}\""
+    "$2" || { _af_d=$((_af_d - 1)); return 0; }
+    eval "_af_i_$_af_d=\$((\$_af_i_$_af_d + 1))"
+  done
+  _af_d=$((_af_d - 1))
+}
+
+array_clear() { _shsh_check_name "$1" || return 1; eval "__shsh_${1}_n=0"; }
+array_clear_full() {
+  _shsh_check_name "$1" || return 1
+  eval "_ac_len=\"\${__shsh_${1}_n:-0}\""
+  _ac_i=0
+
+  while [ $((_ac_i + 4)) -le "$_ac_len" ]; do
+    eval "unset __shsh_${1}_$((_ac_i)) \
+                 __shsh_${1}_$((_ac_i+1)) \
+                 __shsh_${1}_$((_ac_i+2)) \
+                 __shsh_${1}_$((_ac_i+3))"
+    _ac_i=$((_ac_i + 4))
+  done
+
+  while [ "$_ac_i" -lt "$_ac_len" ]; do
+    eval "unset __shsh_${1}_$_ac_i"
+    _ac_i=$((_ac_i + 1))
+  done
+  eval "__shsh_${1}_n=0"
+}
+
+array_unset() { _shsh_check_name "$1" || return 1; _shsh_check_int "$2" || return 1; eval "unset __shsh_${1}_$2"; }
+
+array_remove() {
+  _shsh_sane "$1" "$2" || return 1;
+  eval "_ar_len=\"\${__shsh_${1}_n:-0}\""
+  [ "$2" -ge "$_ar_len" ] && return 1
+  _ar_i=$2
+
+  while [ $((_ar_i + 4)) -lt "$_ar_len" ]; do
+    eval "_idx=$_ar_i"
+
+    eval "__shsh_${1}_$((_idx))=\"\${__shsh_${1}_$((_idx+1))}\"; \
+          __shsh_${1}_$((_idx+1))=\"\${__shsh_${1}_$((_idx+2))}\"; \
+          __shsh_${1}_$((_idx+2))=\"\${__shsh_${1}_$((_idx+3))}\"; \
+          __shsh_${1}_$((_idx+3))=\"\${__shsh_${1}_$((_idx+4))}\""
+
+    _ar_i=$((_ar_i + 4))
+  done
+
+  while [ "$((_ar_i + 1))" -lt "$_ar_len" ]; do
+    eval "__shsh_${1}_$_ar_i=\"\${__shsh_${1}_$((_ar_i + 1))}\""
+    _ar_i=$((_ar_i + 1))
+  done
+
+  eval "unset __shsh_${1}_$((_ar_len - 1)); __shsh_${1}_n=$((_ar_len - 1))"
+}
+
+array_delete() { array_remove "$@"; }
+
+map_set() {
+  _shsh_sane "$1" "$2" || return 1
+  eval "__shsh_map_${1}_${2}=\"\$3\"; _mset_exists=\"\${__shsh_map_${1}_${2}__exists}\""
+  if [ -z "$_mset_exists" ]; then
+    eval "__shsh_map_${1}_${2}__exists=1; _mset_idx=\${__shsh_mapkeys_${1}_n:-0}"
+    eval "__shsh_mapkeys_${1}_$_mset_idx=\"$2\"; __shsh_mapkeys_${1}_n=$((_mset_idx + 1))"
+  fi
+}
+
+map_keys() {
+  _shsh_sane "$1" "$2" || return 1
+
+  eval "_mk_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  _mk_i=0
+
+  eval "_out_idx=\"\${__shsh_${2}_n:-0}\""
+
+  while eval "[ \$(( \$_mk_i + 4 )) -le \$_mk_len ]"; do
+    eval "_idx=\$_mk_i"
+
+    eval "K0=\"\${__shsh_mapkeys_${1}_$((_idx))}\"; \
+          K1=\"\${__shsh_mapkeys_${1}_$((_idx+1))}\"; \
+          K2=\"\${__shsh_mapkeys_${1}_$((_idx+2))}\"; \
+          K3=\"\${__shsh_mapkeys_${1}_$((_idx+3))}\""
+
+    eval "X0=\"\${__shsh_map_${1}_${K0}+x}\"; \
+          X1=\"\${__shsh_map_${1}_${K1}+x}\"; \
+          X2=\"\${__shsh_map_${1}_${K2}+x}\"; \
+          X3=\"\${__shsh_map_${1}_${K3}+x}\""
+
+    [ -n "$X0" ] && { eval "__shsh_${2}_$_out_idx=\"\$K0\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X1" ] && { eval "__shsh_${2}_$_out_idx=\"\$K1\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X2" ] && { eval "__shsh_${2}_$_out_idx=\"\$K2\""; _out_idx=$((_out_idx + 1)); }
+    [ -n "$X3" ] && { eval "__shsh_${2}_$_out_idx=\"\$K3\""; _out_idx=$((_out_idx + 1)); }
+
+    eval "_mk_i=\$((\$_mk_i + 4))"
+  done
+
+  while eval "[ \$_mk_i -lt \$_mk_len ]"; do
+    eval "_mk_key=\"\${__shsh_mapkeys_${1}_$_mk_i}\""
+    eval "_mk_exists=\"\${__shsh_map_${1}_${_mk_key}+x}\""
+    if [ -n "$_mk_exists" ]; then
+      eval "__shsh_${2}_$_out_idx=\"\$_mk_key\""
+      _out_idx=$((_out_idx + 1))
+    fi
+    _mk_i=$((_mk_i + 1))
+  done
+
+  eval "__shsh_${2}_n=$_out_idx"
+}
+
+map_for() {
+  _shsh_check_name "$1" || return 1
+  _mf_d=${_mf_d:--1}; _mf_d=$((_mf_d + 1))
+  eval "_mf_len_$_mf_d=\"\${__shsh_mapkeys_${1}_n:-0}\"; _mf_i_$_mf_d=0"
+
+  while eval "[ \$(( \$_mf_i_$_mf_d + 4 )) -le \$_mf_len_$_mf_d ]"; do
+    eval "_idx=\$_mf_i_$_mf_d"
+
+    eval "K0=\"\${__shsh_mapkeys_${1}_$((_idx))}\"; \
+          K1=\"\${__shsh_mapkeys_${1}_$((_idx+1))}\"; \
+          K2=\"\${__shsh_mapkeys_${1}_$((_idx+2))}\"; \
+          K3=\"\${__shsh_mapkeys_${1}_$((_idx+3))}\""
+
+    eval "V0=\"\${__shsh_map_${1}_${K0}}\"; X0=\"\${__shsh_map_${1}_${K0}+x}\"; \
+          V1=\"\${__shsh_map_${1}_${K1}}\"; X1=\"\${__shsh_map_${1}_${K1}+x}\"; \
+          V2=\"\${__shsh_map_${1}_${K2}}\"; X2=\"\${__shsh_map_${1}_${K2}+x}\"; \
+          V3=\"\${__shsh_map_${1}_${K3}}\"; X3=\"\${__shsh_map_${1}_${K3}+x}\""
+
+    if [ -n "$X0" ]; then R="$V0"; K="$K0"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X1" ]; then R="$V1"; K="$K1"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X2" ]; then R="$V2"; K="$K2"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+    if [ -n "$X3" ]; then R="$V3"; K="$K3"; "$2" || { _mf_d=$((_mf_d - 1)); return 0; }; fi
+
+    eval "_mf_i_$_mf_d=\$((\$_mf_i_$_mf_d + 4))"
+  done
+
+  while eval "[ \$_mf_i_$_mf_d -lt \$_mf_len_$_mf_d ]"; do
+    eval "_mf_idx=\$_mf_i_$_mf_d"
+    eval "_mf_key=\"\${__shsh_mapkeys_${1}_$_mf_idx}\""
+    eval "_mf_exists=\"\${__shsh_map_${1}_${_mf_key}+x}\""
+    if [ -n "$_mf_exists" ]; then
+      eval "R=\"\${__shsh_map_${1}_${_mf_key}}\""
+      K="$_mf_key"
+      "$2" || { _mf_d=$((_mf_d - 1)); return 0; }
+    fi
+    eval "_mf_i_$_mf_d=\$((\$_mf_i_$_mf_d + 1))"
+  done
+  _mf_d=$((_mf_d - 1))
+}
+
+map_clear() {
+  _shsh_check_name "$1" || return 1
+  eval "_mc_len=\"\${__shsh_mapkeys_${1}_n:-0}\""
+  _mc_i=0
+  while [ "$_mc_i" -lt "$_mc_len" ]; do
+    eval "_mc_key=\"\${__shsh_mapkeys_${1}_$_mc_i}\""
+    eval "unset __shsh_map_${1}_${_mc_key}"
+    eval "unset __shsh_map_${1}_${_mc_key}__exists"
+    eval "unset __shsh_mapkeys_${1}_$_mc_i"
+    _mc_i=$((_mc_i + 1))
+  done
+  eval "__shsh_mapkeys_${1}_n=0"
+}
+
+map_get() { _shsh_sane "$1" "$2" || return 1; eval "R=\"\${__shsh_map_${1}_${2}}\""; }
+map_has() { _shsh_sane "$1" "$2" || return 1; eval "[ -n \"\${__shsh_map_${1}_${2}+x}\" ]"; }
+map_delete() { _shsh_sane "$1" "$2" || return 1; eval "unset __shsh_map_${1}_${2}"; }
+
+file_read() {
+  R=""
+  while IFS= read -r _fr_line || [ -n "$_fr_line" ]; do
+    R="$R${R:+
+}$_fr_line"
+  done < "$1"
+}
+
+file_write() { printf '%s\n' "$2" > "$1"; }
+file_append() { printf '%s\n' "$2" >> "$1"; }
+file_exists() { [ -f "$1" ]; }
+dir_exists() { [ -d "$1" ]; }
+file_executable() { [ -x "$1" ]; }
+path_writable() { [ -w "$1" ]; }
+
+file_lines() {
+  _shsh_check_name "$2" || return 1
+  eval "__shsh_${2}_n=0"
+  while IFS= read -r _fl_line || [ -n "$_fl_line" ]; do
+    array_add "$2" "$_fl_line"
+  done < "$1"
+}
+
+file_each() {
+  _fe_i=0
+  while IFS= read -r R || [ -n "$R" ]; do
+    "$2"
+    _fe_i=$((_fe_i + 1))
+  done < "$1"
+}
+
+tokenize() {
+  _tk_in_dq=0 _tk_in_sq=0 _tk_escape=0
+  _tk_input="$1" _tk_out="$2" _tk_char="" _tk_token=""
+  _shsh_check_name "$_tk_out" || return 1
+  eval "__shsh_${_tk_out}_n=0"
+
+  while [ -n "$_tk_input" ]; do
+    if [ "$_tk_escape" -eq 0 ]; then
+      _tk_chunk=""
+      if [ "$_tk_in_sq" -eq 1 ]; then
+        _tk_chunk="${_tk_input%%\'*}"
+      elif [ "$_tk_in_dq" -eq 1 ]; then
+        _tk_chunk="${_tk_input%%[\"\\]*}"
+      else
+        _tk_chunk="${_tk_input%%[ \(\)\"\'\\]*}"
+      fi
+
+      if [ -n "$_tk_chunk" ]; then
+         if [ "$_tk_chunk" != "$_tk_input" ]; then
+           _tk_token="$_tk_token$_tk_chunk"
+           _tk_input="${_tk_input#$_tk_chunk}"
+           continue
+         elif [ "$_tk_in_sq" -eq 1 ] || [ "$_tk_in_dq" -eq 1 ]; then
+            _tk_token="$_tk_token$_tk_chunk"
+            _tk_input=""
+            continue
+         else
+             _tk_token="$_tk_token$_tk_chunk"
+             _tk_input=""
+             continue
+         fi
+      fi
+    fi
+
+    _tk_char="${_tk_input%"${_tk_input#?}"}"
+    _tk_input="${_tk_input#?}"
+
+    if [ "$_tk_escape" -eq 1 ]; then
+      _tk_token="$_tk_token$_tk_char"
+      _tk_escape=0
+      continue
+    fi
+
+    if [ "$_tk_char" = "\\" ] && [ "$_tk_in_sq" -eq 0 ]; then
+      _tk_escape=1
+      _tk_token="$_tk_token$_tk_char"
+      continue
+    fi
+
+    if [ "$_tk_char" = "$_shsh_dq" ] && [ "$_tk_in_sq" -eq 0 ]; then
+      [ "$_tk_in_dq" -eq 1 ] && _tk_in_dq=0 || _tk_in_dq=1
+      _tk_token="$_tk_token$_tk_char"
+      continue
+    fi
+
+    if [ "$_tk_char" = "$_shsh_sq" ] && [ "$_tk_in_dq" -eq 0 ]; then
+      [ "$_tk_in_sq" -eq 1 ] && _tk_in_sq=0 || _tk_in_sq=1
+      _tk_token="$_tk_token$_tk_char"
+      continue
+    fi
+
+    if [ "$_tk_in_dq" -eq 1 ] || [ "$_tk_in_sq" -eq 1 ]; then
+      _tk_token="$_tk_token$_tk_char"
+      continue
+    fi
+
+    case "$_tk_char" in
+      "(" | ")")
+        [ -n "$_tk_token" ] && {
+            eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+            eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_token\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
+            _tk_token=""; 
+        }
+        eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+        eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_char\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
+        ;;
+      " " | "	")
+        [ -n "$_tk_token" ] && { 
+            eval "_aa_idx=\${__shsh_${_tk_out}_n:-0}"
+            eval "__shsh_${_tk_out}_$_aa_idx=\"\$_tk_token\"; __shsh_${_tk_out}_n=$((_aa_idx + 1))"
+            _tk_token=""; 
+        }
+        ;;
+      *)
+        _tk_token="$_tk_token$_tk_char"
+        ;;
+    esac
+  done
+  [ -n "$_tk_token" ] && array_add "$_tk_out" "$_tk_token"
+}
+
+ENDIAN=${ENDIAN:-0}
+
+_is_int() { case "$1" in ""|*[!0-9]*) case "$1" in 0x*|0X*) return 0;; *) return 1;; esac ;; *) return 0;; esac; }
+
+bit_8() {
+  for _b8_arg in "$@"; do
+    _b8_arg="${_b8_arg%,}"
+    case "$_b8_arg" in
+      "$_shsh_dq"*"$_shsh_dq")
+        _b8_str="${_b8_arg#"$_shsh_dq"}"
+        printf "%s" "${_b8_str%"$_shsh_dq"}"
+        ;;
+      *)
+        if _is_int "$_b8_arg"; then
+          _b8_v=$((${_b8_arg}))
+          printf "%b" "\\$(( (_b8_v >> 6) & 7 ))$(( (_b8_v >> 3) & 7 ))$(( _b8_v & 7 ))"
+        else
+          printf "%s" "$_b8_arg"
+        fi
+        ;;
+    esac
+  done
+}
+
+bit_16() {
+  _b16_buf=""
+  for _b16_arg in "$@"; do
+    _b16_v=$((${_b16_arg%,}))
+    _b16_hi=$(( (_b16_v >> 8) & 0xff ))
+    _b16_lo=$(( _b16_v & 0xff ))
+    _o_hi="\\$(( (_b16_hi >> 6) & 7 ))$(( (_b16_hi >> 3) & 7 ))$(( _b16_hi & 7 ))"
+    _o_lo="\\$(( (_b16_lo >> 6) & 7 ))$(( (_b16_lo >> 3) & 7 ))$(( _b16_lo & 7 ))"
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) _b16_buf="$_b16_buf$_o_hi$_o_lo" ;;
+      *)                   _b16_buf="$_b16_buf$_o_lo$_o_hi" ;;
+    esac
+  done
+  [ -n "$_b16_buf" ] && printf "%b" "$_b16_buf"
+}
+
+bit_32() {
+  _b32_buf=""
+  while [ $# -ge 4 ]; do
+    _v0=$((${1%,})); _v1=$((${2%,})); _v2=$((${3%,})); _v3=$((${4%,}))
+
+    _b1=$(( (_v0 >> 24) & 0xff )); _b2=$(( (_v0 >> 16) & 0xff ))
+    _b3=$(( (_v0 >> 8) & 0xff )); _b4=$(( _v0 & 0xff ))
+    _o0_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o0_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
+
+    _b1=$(( (_v1 >> 24) & 0xff )); _b2=$(( (_v1 >> 16) & 0xff ))
+    _b3=$(( (_v1 >> 8) & 0xff )); _b4=$(( _v1 & 0xff ))
+    _o1_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o1_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
+
+    _b1=$(( (_v2 >> 24) & 0xff )); _b2=$(( (_v2 >> 16) & 0xff ))
+    _b3=$(( (_v2 >> 8) & 0xff )); _b4=$(( _v2 & 0xff ))
+    _o2_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o2_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
+
+    _b1=$(( (_v3 >> 24) & 0xff )); _b2=$(( (_v3 >> 16) & 0xff ))
+    _b3=$(( (_v3 >> 8) & 0xff )); _b4=$(( _v3 & 0xff ))
+    _o3_be="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    _o3_le="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"
+
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o0_be$_o1_be$_o2_be$_o3_be" ;;
+      *)                   _b32_buf="$_b32_buf$_o0_le$_o1_le$_o2_le$_o3_le" ;;
+    esac
+    shift 4
+  done
+
+  for _b32_arg in "$@"; do
+    _b32_v=$((${_b32_arg%,}))
+    _b1=$(( (_b32_v >> 24) & 0xff )); _b2=$(( (_b32_v >> 16) & 0xff ))
+    _b3=$(( (_b32_v >> 8) & 0xff )); _b4=$(( _b32_v & 0xff ))
+    _o1="\\$(( (_b1>>6)&7 ))$(( (_b1>>3)&7 ))$(( _b1&7 ))"; _o2="\\$(( (_b2>>6)&7 ))$(( (_b2>>3)&7 ))$(( _b2&7 ))"
+    _o3="\\$(( (_b3>>6)&7 ))$(( (_b3>>3)&7 ))$(( _b3&7 ))"; _o4="\\$(( (_b4>>6)&7 ))$(( (_b4>>3)&7 ))$(( _b4&7 ))"
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) _b32_buf="$_b32_buf$_o1$_o2$_o3$_o4" ;;
+      *)                   _b32_buf="$_b32_buf$_o4$_o3$_o2$_o1" ;;
+    esac
+  done
+  [ -n "$_b32_buf" ] && printf "%b" "$_b32_buf"
+}
+
+bit_64() {
+  _b64_buf=""
+  for _b64_arg in "$@"; do
+    _b64_v=$((${_b64_arg%,}))
+    _b64_h=$(( _b64_v >> 32 ))
+    _b64_l=$(( _b64_v & 0xFFFFFFFF ))
+    _h1=$(( (_b64_h >> 24) & 0xff )); _h2=$(( (_b64_h >> 16) & 0xff ))
+    _h3=$(( (_b64_h >> 8) & 0xff )); _h4=$(( _b64_h & 0xff ))
+    _l1=$(( (_b64_l >> 24) & 0xff )); _l2=$(( (_b64_l >> 16) & 0xff ))
+    _l3=$(( (_b64_l >> 8) & 0xff )); _l4=$(( _b64_l & 0xff ))
+    _oh1="\\$(( (_h1>>6)&7 ))$(( (_h1>>3)&7 ))$(( _h1&7 ))"
+    _oh2="\\$(( (_h2>>6)&7 ))$(( (_h2>>3)&7 ))$(( _h2&7 ))"
+    _oh3="\\$(( (_h3>>6)&7 ))$(( (_h3>>3)&7 ))$(( _h3&7 ))"
+    _oh4="\\$(( (_h4>>6)&7 ))$(( (_h4>>3)&7 ))$(( _h4&7 ))"
+    _ol1="\\$(( (_l1>>6)&7 ))$(( (_l1>>3)&7 ))$(( _l1&7 ))"
+    _ol2="\\$(( (_l2>>6)&7 ))$(( (_l2>>3)&7 ))$(( _l2&7 ))"
+    _ol3="\\$(( (_l3>>6)&7 ))$(( (_l3>>3)&7 ))$(( _l3&7 ))"
+    _ol4="\\$(( (_l4>>6)&7 ))$(( (_l4>>3)&7 ))$(( _l4&7 ))"
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) _b64_buf="$_b64_buf$_oh1$_oh2$_oh3$_oh4$_ol1$_ol2$_ol3$_ol4" ;;
+      *)                   _b64_buf="$_b64_buf$_ol4$_ol3$_ol2$_ol1$_oh4$_oh3$_oh2$_oh1" ;;
+    esac
+  done
+  [ -n "$_b64_buf" ] && printf "%b" "$_b64_buf"
+}
+
+bit_128() {
+  for _b128_arg in "$@"; do
+    _b128_s="${_b128_arg%,}"
+    case "$_b128_s" in 0x*|0X*) _b128_s="${_b128_s#??}";; esac
+    while [ ${#_b128_s} -lt 32 ]; do _b128_s="0$_b128_s"; done
+    _b128_a="0x$(printf "%.8s" "$_b128_s")"
+    _b128_b="0x$(printf "%.8s" "${_b128_s#????????}")"
+    _b128_c="0x$(printf "%.8s" "${_b128_s#????????????????}")"
+    _b128_d="0x${_b128_s#????????????????????????}"
+    case "$ENDIAN" in
+      big|Big|BIG|BE|be|1) bit_32 "$_b128_a" "$_b128_b" "$_b128_c" "$_b128_d" ;;
+      *)                   bit_32 "$_b128_d" "$_b128_c" "$_b128_b" "$_b128_a" ;;
+    esac
+  done
+}
+
+file_hash() {
+  path="$1"
+
+  if ! [ -f "$path" ]; then
+    return 1
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    out=$(sha256sum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    out=$(shasum -a 256 "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v md5sum >/dev/null 2>&1; then
+    out=$(md5sum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  if command -v cksum >/dev/null 2>&1; then
+    out=$(cksum "$path" 2>/dev/null) || return 1
+    R=$(echo "$out" | awk '{print $1}')
+    return 0
+  fi
+
+  return 1
+}
+
+if [ -z "$_shsh_tmp_counter" ]; then
+  _shsh_tmp_counter=0
+fi
+
+tmp_file() {
+  base="$TMPDIR"
+  if [ -z "$base" ]; then
+    base="/tmp"
+  fi
+
+  while true; do
+    _shsh_tmp_counter=$((_shsh_tmp_counter + 1))
+    name="shsh_$$_${_shsh_tmp_counter}.tmp"
+    path="$base/$name"
+
+    if ! [ -f "$path" ]; then
+      : > "$path" || return 1
+      R="$path"
+      return 0
+    fi
+  done
+}
+
+tmp_dir() {
+  base="$TMPDIR"
+  if [ -z "$base" ]; then
+    base="/tmp"
+  fi
+
+  while true; do
+    _shsh_tmp_counter=$((_shsh_tmp_counter + 1))
+    name="shsh_$$_${_shsh_tmp_counter}.d"
+    path="$base/$name"
+
+    if mkdir "$path" 2>/dev/null; then
+      R="$path"
+      return 0
+    fi
+  done
+}
+
+_shsh_test_pass=0
+_shsh_test_fail=0
+_shsh_test_name=""
+
+test_start() {
+  _shsh_test_name="$1"
+}
+
+test_end() {
+  if [ "$_shsh_test_fail" -gt 0 ]; then
+    printf '\n%s passed, %s failed\n' "$_shsh_test_pass" "$_shsh_test_fail"
+    exit 1
+  else
+    printf '\n%s passed\n' "$_shsh_test_pass"
+  fi
+}
+
+test_pass() {
+  printf '✓ %s\n' "$_shsh_test_name"
+  _shsh_test_pass=$((_shsh_test_pass + 1))
+}
+
+test_fail() {
+  printf '✗ %s: %s\n' "$_shsh_test_name" "$1"
+  _shsh_test_fail=$((_shsh_test_fail + 1))
+}
+
+test_equals() {
+  if [ "$1" = "$2" ]; then
+    test_pass
+  else
+    test_fail "expected '$2', got '$1'"
+  fi
+}
+
+test_not_equals() {
+  if [ "$1" != "$2" ]; then
+    test_pass
+  else
+    test_fail "expected not '$2', got '$1'"
+  fi
+}
+
+test_true() {
+  if [ "$1" = "1" ] || [ "$1" = "true" ]; then
+    test_pass
+  else
+    test_fail "expected true, got '$1'"
+  fi
+}
+
+test_false() {
+  if [ "$1" = "0" ] || [ "$1" = "false" ] || [ -z "$1" ]; then
+    test_pass
+  else
+    test_fail "expected false, got '$1'"
+  fi
+}
+
+test_ok() {
+  if [ "$1" -eq 0 ]; then
+    test_pass
+  else
+    test_fail "expected exit code 0, got '$1'"
+  fi
+}
+
+test_err() {
+  if [ "$1" -ne 0 ]; then
+    test_pass
+  else
+    test_fail "expected non-zero exit code, got 0"
+  fi
+}
+
+test_contains() {
+  case "$1" in
+    *"$2"*) test_pass ;;
+    *) test_fail "'$1' does not contain '$2'" ;;
+  esac
+}
+
+test_starts() {
+  case "$1" in
+    "$2"*) test_pass ;;
+    *) test_fail "'$1' does not start with '$2'" ;;
+  esac
+}
+
+test_ends() {
+  case "$1" in
+    *"$2") test_pass ;;
+    *) test_fail "'$1' does not end with '$2'" ;;
+  esac
+}
+
+test_file_exists() {
+  if [ -f "$1" ]; then
+    test_pass
+  else
+    test_fail "file '$1' does not exist"
+  fi
+}
+
+test_dir_exists() {
+  if [ -d "$1" ]; then
+    test_pass
+  else
+    test_fail "directory '$1' does not exist"
+  fi
+}
+# __RUNTIME_END__
 
 if [ -z "$_SHSH_DASH" ]; then
   if command -v dash >/dev/null 2>&1; then
@@ -742,6 +1473,133 @@ block_stack=""
 single_line_if_active=0
 single_line_if_indent=""
 test_block_name=""
+_loaded_modules=""
+
+_module_name_from_path() {
+  _mnfp_path="$1"
+  _mnfp_name="${_mnfp_path##*/}"
+  _mnfp_name="${_mnfp_name%.shsh}"
+  R="$_mnfp_name"
+}
+
+_transform_module_call() {
+  _tmc_line="$1"
+  _tmc_out=""
+  _tmc_rest="$_tmc_line"
+
+  while :; do
+    case $_tmc_rest in
+    *"."*)
+      ;;
+    *)break;;
+    esac
+
+    _tmc_before="${_tmc_rest%%.*}"
+    _tmc_after="${_tmc_rest#*.}"
+
+    _tmc_module=""
+    _tmc_prefix=""
+    _tmc_check="$_tmc_before"
+
+    while [ -n "$_tmc_check" ]; do
+      _tmc_last="${_tmc_check#"${_tmc_check%?}"}"
+      case $_tmc_last in
+      [a-zA-Z0-9_])_tmc_module="$_tmc_last$_tmc_module"; _tmc_check="${_tmc_check%?}";;
+      *)_tmc_prefix="$_tmc_check"; break;;
+      esac
+    done
+
+    case $_loaded_modules in
+    *" $_tmc_module "*)
+      _tmc_func="${_tmc_after%%[	 ()]*}"
+      if [ "$_tmc_func" = "$_tmc_after" ]; then
+        _tmc_rest_after=""
+      else
+        _tmc_rest_after="${_tmc_after#"$_tmc_func"}"
+      fi
+      case $_tmc_func in
+      ""|*[!a-zA-Z0-9_]*)
+        _tmc_out="$_tmc_out$_tmc_prefix$_tmc_module."
+        _tmc_rest="$_tmc_after"
+        ;;
+      *)
+        _tmc_out="$_tmc_out${_tmc_prefix}${_tmc_module}_${_tmc_func}"
+        _tmc_rest="$_tmc_rest_after"
+      ;;esac
+      ;;
+    *)
+      _tmc_out="$_tmc_out$_tmc_before."
+      _tmc_rest="$_tmc_after"
+    ;;esac
+  done
+
+  R="$_tmc_out$_tmc_rest"
+}
+
+_transform_module_file() {
+  _tmf_path="$1"
+  _tmf_module="$2"
+  _tmf_funcs=""
+  _tmf_content=""
+
+  while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]; do
+    _tmf_content="$_tmf_content$_tmf_line
+"
+    case $_tmf_line in
+    *"() {"*)
+      R=${_tmf_line#"${_tmf_line%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}
+      _tmf_trimmed="$R"
+      R=${_tmf_trimmed%%"()"*}; [ "$R" != "$_tmf_trimmed" ]
+      _tmf_funcs="$_tmf_funcs $R "
+    ;;esac
+  done
+
+printf '%s' "$_tmf_content" |   while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]; do
+    case $_tmf_line in
+    *"() {"*)
+      R=${_tmf_line#"${_tmf_line%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}
+      _tmf_trimmed="$R"
+      R=${_tmf_trimmed%%"()"*}; [ "$R" != "$_tmf_trimmed" ]
+      _tmf_fname="$R"
+      R=${_tmf_trimmed#*"()"}; [ "$R" != "$_tmf_trimmed" ]
+      _tmf_rest="$R"
+      _tmf_line="${_tmf_module}_${_tmf_fname}()$_tmf_rest"
+      ;;
+    *)
+      for _tmf_fn in $_tmf_funcs; do
+        _tmf_new_line=""
+        _tmf_remain="$_tmf_line"
+        while case "$_tmf_remain" in *"$_tmf_fn"*) ;; *) false;; esac; do
+          R=${_tmf_remain%%"$_tmf_fn"*}; [ "$R" != "$_tmf_remain" ]; _tmf_before="$R"
+          R=${_tmf_remain#*"$_tmf_fn"}; [ "$R" != "$_tmf_remain" ]; _tmf_remain="$R"
+          _tmf_last_char=""
+          if [ -n "$_tmf_before" ]; then
+            _tmf_last_char="${_tmf_before#"${_tmf_before%?}"}"
+          fi
+          _tmf_first_char=""
+          if [ -n "$_tmf_remain" ]; then
+            _tmf_first_char="${_tmf_remain%"${_tmf_remain#?}"}"
+          fi
+          _tmf_is_call=0
+          case $_tmf_last_char in
+          ""|" "|";"|"("|"|"|"&"|"!"|"	")
+            case $_tmf_first_char in
+            ""|" "|";"|")"|"|"|"&"|"	")
+              _tmf_is_call=1
+            ;;esac
+          ;;esac
+          if [ "$_tmf_is_call" = 1 ]; then
+            _tmf_new_line="$_tmf_new_line${_tmf_before}${_tmf_module}_${_tmf_fn}"
+          else
+            _tmf_new_line="$_tmf_new_line${_tmf_before}${_tmf_fn}"
+          fi
+        done
+        _tmf_line="$_tmf_new_line$_tmf_remain"
+      done
+    ;;esac
+    printf '%s\n' "$_tmf_line"
+  done
+}
 
 push() { block_stack="$block_stack$1"; }
 pop()  { block_stack="${block_stack%?}"; }
@@ -1535,6 +2393,12 @@ transform_line() {
   line="$1"
   R=${line%%[![:space:]]*}; R2=${line#"$R"}; indent="$R"; stripped="$R2"
 
+  if [ -n "$_loaded_modules" ]; then
+    _transform_module_call "$stripped"
+    stripped="$R"
+    line="${indent}${stripped}"
+  fi
+
   _close_single_line_if "$indent" "$stripped"
 
   case $stripped in
@@ -1563,6 +2427,25 @@ transform_line() {
     esac
     ;;
   "#"*)printf '%s\n' "$line";;
+  "use "*)
+    R=${stripped#*"use "}; [ "$R" != "$stripped" ]; _use_path="$R"
+    R=${_use_path#"${_use_path%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}; _use_path="$R"
+    case $_use_path in
+    '"'*'"')_use_path="${_use_path#\"}"; _use_path="${_use_path%\"}";;
+    "'"*"'")_use_path="${_use_path#\'}"; _use_path="${_use_path%\'}";;
+    esac
+    _module_name_from_path "$_use_path"; _use_module="$R"
+    case $_loaded_modules in
+    *" $_use_module "*)
+      return
+    ;;esac
+    _loaded_modules="$_loaded_modules $_use_module "
+    if [ -f "$_use_path" ]; then
+      _transform_module_file "$_use_path" "$_use_module" < "$_use_path" | transform
+    else
+      printf '%s\n' "# ERROR: Module not found: $_use_path" >&2
+    fi
+    ;;
   "end")
     peek
     case $R in
@@ -1745,6 +2628,7 @@ transform() {
   try_depth=0
   test_block_name=""
   _has_tests=0
+  _loaded_modules=""
 
   while IFS= read -r current_line || [ -n "$current_line" ]; do
     transform_line "$current_line"

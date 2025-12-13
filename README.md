@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 675 tests.
+Passing 681 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -27,6 +27,7 @@ fi
 - **Arithmetic** — `i++`, `i--`, `i += 5`, `i -= 3`, `i *= 2`, `i /= 4`, `i %= 3`
 - **Assignment Capture** — `result = str_before "$s" ":"` captures function results
 - **Single-line Forms** — `if $x > 0: echo "yes"`, `while $i < 10: i++`
+- **Modules** — `use lib/utils.shsh` with scoped calls `utils.function`
 - **Try/Catch** — Error handling with automatic propagation
 - **Arrays** — Dynamic arrays with iteration support
 - **Maps** — Key-value stores with enumeration
@@ -380,6 +381,87 @@ test "add zero" {
   add 0 0
   test_equals "$R" "0"
 }
+```
+
+---
+
+## Modules
+
+Import reusable code with scoped namespaces:
+
+```sh
+use utils.shsh
+
+utils.greet "World"
+echo "$R"
+```
+
+This is similar to TypeScript's `import * as utils from "utils"`.
+
+### Creating a Module
+
+Any `.shsh` file can be used as a module. Functions are automatically prefixed with the module name:
+
+```sh
+# math.shsh
+add() {
+  R=$(($1 + $2))
+}
+
+multiply() {
+  R=$(($1 * $2))
+}
+
+# Internal calls are also transformed
+double() {
+  multiply $1 2
+}
+```
+
+### Using a Module
+
+```sh
+# main.shsh
+use math.shsh
+
+math.add 5 3
+echo "5 + 3 = $R"      # 5 + 3 = 8
+
+math.multiply 4 7
+echo "4 * 7 = $R"      # 4 * 7 = 28
+
+math.double 10
+echo "10 * 2 = $R"     # 10 * 2 = 20
+```
+
+### Multiple Modules
+
+```sh
+use lib/strings.shsh
+use lib/arrays.shsh
+use lib/http.shsh
+
+strings.trim "  hello  "
+arrays.push myarr "$R"
+http.get "https://example.com"
+```
+
+### How It Works
+
+When you `use path/to/module.shsh`:
+
+1. The module name is derived from the filename (`module`)
+2. All functions in the file are prefixed (`fn` → `module_fn`)
+3. Internal function calls within the module are also prefixed
+4. In your code, `module.fn args` becomes `module_fn args`
+
+### Path Resolution
+
+Module paths are relative to where shsh is invoked:
+
+```sh
+use lib/utils.shsh           # ./lib/utils.shsh
+use ../shared/common.shsh    # ../shared/common.shsh
 ```
 
 ---

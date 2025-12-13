@@ -754,6 +754,156 @@ block_stack=""
 single_line_if_active=0
 single_line_if_indent=""
 test_block_name=""
+_loaded_modules=""
+
+# Module system: Extract module name from path (e.g., "path/to/file.shsh" -> "file")
+_module_name_from_path() {
+  _mnfp_path="$1"
+  # Get basename
+  _mnfp_name="${_mnfp_path##*/}"
+  # Remove .shsh extension
+  _mnfp_name="${_mnfp_name%.shsh}"
+  R="$_mnfp_name"
+}
+
+# Module system: Transform module.function syntax to module_function
+# For shell-style calls like: module.func arg1 arg2
+_transform_module_call() {
+  _tmc_line="$1"
+  _tmc_out=""
+  _tmc_rest="$_tmc_line"
+  
+  while :
+    # Look for pattern: word.word where first word is a loaded module
+    switch $_tmc_rest
+    case *"."*
+    default: break
+    end
+    
+    # Find the first dot
+    _tmc_before="${_tmc_rest%%.*}"
+    _tmc_after="${_tmc_rest#*.}"
+    
+    # Check if character before dot is end of a valid identifier
+    _tmc_module=""
+    _tmc_prefix=""
+    _tmc_check="$_tmc_before"
+    
+    # Walk backward to find module name
+    while [ -n "$_tmc_check" ]
+      _tmc_last="${_tmc_check#"${_tmc_check%?}"}"
+      switch $_tmc_last
+      case [a-zA-Z0-9_]: _tmc_module="$_tmc_last$_tmc_module"; _tmc_check="${_tmc_check%?}"
+      default: _tmc_prefix="$_tmc_check"; break
+      end
+    done
+    
+    # Check if this module is loaded
+    switch $_loaded_modules
+    case *" $_tmc_module "*
+      # Get function name (up to space, paren, or end of string)
+      _tmc_func="${_tmc_after%%[	 ()]*}"
+      # If no delimiter found, func is entire remainder
+      if "$_tmc_func" == "$_tmc_after"
+        _tmc_rest_after=""
+      else
+        _tmc_rest_after="${_tmc_after#"$_tmc_func"}"
+      end
+      
+      # Validate function name
+      switch $_tmc_func
+      case ""|*[!a-zA-Z0-9_]*
+        # Not a valid function name, keep as-is
+        _tmc_out="$_tmc_out$_tmc_prefix$_tmc_module."
+        _tmc_rest="$_tmc_after"
+      default
+        # Transform module.func to module_func
+        _tmc_out="$_tmc_out${_tmc_prefix}${_tmc_module}_${_tmc_func}"
+        _tmc_rest="$_tmc_rest_after"
+      end
+    default
+      # Module not loaded, keep as-is
+      _tmc_out="$_tmc_out$_tmc_before."
+      _tmc_rest="$_tmc_after"
+    end
+  done
+  
+  R="$_tmc_out$_tmc_rest"
+}
+
+# Module system: Transform a module file (prefix all functions with module name)
+# This does two passes: first collect function names, then transform calls and definitions
+_transform_module_file() {
+  _tmf_path="$1"
+  _tmf_module="$2"
+  _tmf_funcs=""
+  _tmf_content=""
+  
+  # First pass: collect all function names and store content
+  while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]
+    _tmf_content="$_tmf_content$_tmf_line
+"
+    switch $_tmf_line
+    case *"() {"*
+      str_trim "$_tmf_line"
+      _tmf_trimmed="$R"
+      str_before "$_tmf_trimmed" "()"
+      _tmf_funcs="$_tmf_funcs $R "
+    end
+  done
+  
+  # Second pass: output with transformations
+  printf '%s' "$_tmf_content" | while IFS= read -r _tmf_line || [ -n "$_tmf_line" ]
+    # Check if this is a function definition
+    switch $_tmf_line
+    case *"() {"*
+      str_trim "$_tmf_line"
+      _tmf_trimmed="$R"
+      str_before "$_tmf_trimmed" "()"
+      _tmf_fname="$R"
+      str_after "$_tmf_trimmed" "()"
+      _tmf_rest="$R"
+      # Prefix with module name
+      _tmf_line="${_tmf_module}_${_tmf_fname}()$_tmf_rest"
+    default
+      # Transform internal function calls
+      for _tmf_fn in $_tmf_funcs
+        # Replace standalone function calls (at beginning of line or after certain chars)
+        _tmf_new_line=""
+        _tmf_remain="$_tmf_line"
+        while str_contains "$_tmf_remain" "$_tmf_fn"
+          str_before "$_tmf_remain" "$_tmf_fn"; _tmf_before="$R"
+          str_after "$_tmf_remain" "$_tmf_fn"; _tmf_remain="$R"
+          # Check if this is a real call (preceded by space, start, or special char, followed by space or end)
+          _tmf_last_char=""
+          if "$_tmf_before" != ""
+            _tmf_last_char="${_tmf_before#"${_tmf_before%?}"}"
+          end
+          _tmf_first_char=""
+          if "$_tmf_remain" != ""
+            _tmf_first_char="${_tmf_remain%"${_tmf_remain#?}"}"
+          end
+          # Check boundaries
+          _tmf_is_call=0
+          switch $_tmf_last_char
+          case ""|" "|";"|"("|"|"|"&"|"!"|"	"
+            switch $_tmf_first_char
+            case ""|" "|";"|")"|"|"|"&"|"	"
+              _tmf_is_call=1
+            end
+          end
+          if $_tmf_is_call == 1
+            _tmf_new_line="$_tmf_new_line${_tmf_before}${_tmf_module}_${_tmf_fn}"
+          else
+            _tmf_new_line="$_tmf_new_line${_tmf_before}${_tmf_fn}"
+          end
+        done
+        _tmf_line="$_tmf_new_line$_tmf_remain"
+      done
+    end
+    printf '%s\n' "$_tmf_line"
+  done
+}
 
 push() { block_stack="$block_stack$1"; }
 pop()  { block_stack="${block_stack%?}"; }
@@ -1515,6 +1665,13 @@ transform_line() {
   line="$1"
   str_split_indent "$line"; indent="$R"; stripped="$R2"
   
+  # Transform module.function() calls to module_function
+  if [ -n "$_loaded_modules" ]
+    _transform_module_call "$stripped"
+    stripped="$R"
+    line="${indent}${stripped}"
+  end
+  
   _close_single_line_if "$indent" "$stripped"
 
   switch $stripped
@@ -1544,6 +1701,32 @@ transform_line() {
     end
   
   case "#"*: printf '%s\n' "$line"
+  
+  case "use "*
+    # Module import: use path/to/module.shsh
+    str_after "$stripped" "use "; _use_path="$R"
+    str_trim "$_use_path"; _use_path="$R"
+    # Remove quotes if present
+    switch $_use_path
+    case '"'*'"': _use_path="${_use_path#\"}"; _use_path="${_use_path%\"}"
+    case "'"*"'": _use_path="${_use_path#\'}"; _use_path="${_use_path%\'}"
+    end
+    # Get module name from path
+    _module_name_from_path "$_use_path"; _use_module="$R"
+    # Check if already loaded
+    switch $_loaded_modules
+    case *" $_use_module "*
+      # Already loaded, skip
+      return
+    end
+    # Mark as loaded
+    _loaded_modules="$_loaded_modules $_use_module "
+    # Transpile the module file with prefixed functions
+    if [ -f "$_use_path" ]
+      _transform_module_file "$_use_path" "$_use_module" < "$_use_path" | transform
+    else
+      printf '%s\n' "# ERROR: Module not found: $_use_path" >&2
+    end
   
   case "end"
     peek
@@ -1716,6 +1899,7 @@ transform() {
   try_depth=0
   test_block_name=""
   _has_tests=0
+  _loaded_modules=""
   
   while IFS= read -r current_line || nonempty "$current_line": transform_line "$current_line"
   
