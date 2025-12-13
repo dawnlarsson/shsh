@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.53.0"
+VERSION="0.54.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -33,6 +33,7 @@ str_ltrim() { R="${1#"${1%%[![:space:]]*}"}"; }
 str_rtrim() { R="${1%"${1##*[![:space:]]}"}"; }
 str_trim() { R="${1#"${1%%[![:space:]]*}"}"; R="${R%"${R##*[![:space:]]}"}"; }
 str_indent() { R="${1%%[![:space:]]*}"; }
+str_split_indent() { R="${1%%[![:space:]]*}"; R2="${1#"$R"}"; }
 
 scan() {
   _sc_in=$1
@@ -758,6 +759,15 @@ push() { block_stack="$block_stack$1"; }
 pop()  { block_stack="${block_stack%?}"; }
 peek() { R="${block_stack#"${block_stack%?}"}"; }
 switch_mark_used() { block_stack="${block_stack%?}S"; }
+switch_mark_closed() { block_stack="${block_stack%?}s"; }
+
+# Check if a statement is simple (no control structures that need multiple lines)
+_is_simple_stmt() {
+  switch $1
+  case "if "*|"while "*|"for "*|"switch "*|"try"|"test "*: return 1
+  end
+  return 0
+}
 
 try_depth=0
 try_depth_inc() { try_depth=$((try_depth + 1)); }
@@ -792,13 +802,12 @@ _transform_arith() {
   _ta_stmt="$1"
   
   _ta_suffix="" _ta_delta=""
-  if str_ends "$_ta_stmt" "++"
-    _ta_suffix="++"; _ta_delta="+ 1"
-  elif str_ends "$_ta_stmt" "--"
-    _ta_suffix="--"; _ta_delta="- 1"
+  switch $_ta_stmt
+  case *"++": _ta_suffix="++"; _ta_delta="+ 1"
+  case *"--": _ta_suffix="--"; _ta_delta="- 1"
   end
   if "$_ta_suffix" != ""
-    str_before "$_ta_stmt" "$_ta_suffix"; _ta_var="$R"
+    _ta_var="${_ta_stmt%"$_ta_suffix"}"
     switch $_ta_var
     case ""|*[!a-zA-Z0-9_]*: return 1
     end
@@ -807,33 +816,26 @@ _transform_arith() {
   end
   
   _ta_op="" _ta_shell_op=""
-  if str_contains "$_ta_stmt" " += "
-    _ta_op=" += "; _ta_shell_op="+"
-  elif str_contains "$_ta_stmt" " -= "
-    _ta_op=" -= "; _ta_shell_op="-"
-  elif str_contains "$_ta_stmt" " *= "
-    _ta_op=" *= "; _ta_shell_op="*"
-  elif str_contains "$_ta_stmt" " /= "
-    _ta_op=" /= "; _ta_shell_op="/"
-  elif str_contains "$_ta_stmt" " %= "
-    _ta_op=" %= "; _ta_shell_op="%"
-  else
-    return 1
+  switch $_ta_stmt
+  case *" += "*: _ta_op=" += "; _ta_shell_op="+"
+  case *" -= "*: _ta_op=" -= "; _ta_shell_op="-"
+  case *" *= "*: _ta_op=" *= "; _ta_shell_op="*"
+  case *" /= "*: _ta_op=" /= "; _ta_shell_op="/"
+  case *" %= "*: _ta_op=" %= "; _ta_shell_op="%"
+  default: return 1
   end
   
-  str_before "$_ta_stmt" "$_ta_op"; _ta_var="$R"
+  _ta_var="${_ta_stmt%%"$_ta_op"*}"
   switch $_ta_var
-  case ""|*[!a-zA-Z0-9_]*
-    return 1
+  case ""|*[!a-zA-Z0-9_]*: return 1
   end
-  str_after "$_ta_stmt" "$_ta_op"; _ta_val="$R"
+  _ta_val="${_ta_stmt#*"$_ta_op"}"
   R="${_ta_var}=\$((${_ta_var} ${_ta_shell_op} ${_ta_val}))"
   return 0
 }
 
 transform_statement() {
-  _ts_stmt="$1"
-  str_ltrim "$_ts_stmt"; _ts_stmt="$R"
+  _ts_stmt="${1#"${1%%[![:space:]]*}"}"
   
   if _transform_arith "$_ts_stmt"
     return
@@ -841,21 +843,19 @@ transform_statement() {
   
   switch $_ts_stmt
   case *" = "*
-    str_before "$_ts_stmt" " = "; _ts_var="$R"
+    _ts_var="${_ts_stmt%%" = "*}"
     switch $_ts_var
     case *[!a-zA-Z0-9_]*|""
       R="$_ts_stmt"
     default
-      str_after "$_ts_stmt" " = "; _ts_call="$R"
+      _ts_call="${_ts_stmt#*" = "}"
       switch $_ts_call
       case '"'*|"'"*|'$'*|""|*'='*
         R="$_ts_stmt"
-      default
-        R="${_ts_call}; ${_ts_var}=\"\$R\""
+      default: R="${_ts_call}; ${_ts_var}=\"\$R\""
       end
     end
-  default
-    R="$_ts_stmt"
+  default: R="$_ts_stmt"
   end
 }
 
@@ -864,17 +864,21 @@ _oac_fail() { R="$_oac_stmt"; return 1; }
 _oac_check_name() { case $1 in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
 _oac_check_int() { case $1 in ""|*[!0-9]*) return 1;; esac; }
 _oac_unquote() {
-  case $1 in
-  '"'*'"') R="${1#\"}"; R="${R%\"}";;
-  "'"*"'") R="${1#\'}"; R="${R%\'}";;
-  *) return 1;;
-  esac
+  switch $1
+  case '"'*'"': R="${1#\"}"; R="${R%\"}"
+  case "'"*"'": R="${1#\'}"; R="${R%\'}"
+  default: return 1
+  end
 }
 _oac_extract_var() {
-  case $1 in
-  '"$'*'"') R="${1#\"\$}"; R="${R%\"}"; _oac_check_name "$R";;
-  *) return 1;;
-  esac
+  switch $1
+  case '"$'*'"': R="${1#\"\$}"; R="${R%\"}"; _oac_check_name "$R"
+  case '$'[a-zA-Z_]*: R="${1#\$}"; _oac_check_name "$R"
+  default: return 1
+  end
+}
+_oac_parse_1arg() {
+  str_after "$_oac_stmt" "$1 "; _oac_arg1="$R"
 }
 _oac_parse_2args() {
   str_after "$_oac_stmt" "$1 "; _oac_rest="$R"
@@ -921,7 +925,8 @@ optimize_static() {
     return 0
     
   case "array_len "*
-    str_after "$_oac_stmt" "array_len "; _oac_name="$R"
+    _oac_parse_1arg "array_len"
+    _oac_name="$_oac_arg1"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="R=\"\${__shsh_${_oac_name}_n:-0}\""
     return 0
@@ -953,7 +958,8 @@ optimize_static() {
     return 0
 
   case "array_clear "*
-    str_after "$_oac_stmt" "array_clear "; _oac_name="$R"
+    _oac_parse_1arg "array_clear"
+    _oac_name="$_oac_arg1"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     R="__shsh_${_oac_name}_n=0"
     return 0
@@ -963,7 +969,6 @@ optimize_static() {
     _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     
-    # Check for problematic characters in quoted strings
     if _oac_unquote "$_oac_val"
       switch $R
       case *'"'*|*"'"*|*'\\'*: _oac_fail; return 1
@@ -974,16 +979,42 @@ optimize_static() {
     R="_aa_i=\${__shsh_${_oac_name}_n:-0}; eval \"__shsh_${_oac_name}_\$_aa_i=\\\"${_oac_val}\\\"\"; __shsh_${_oac_name}_n=\$((_aa_i + 1))"
     return 0
 
+  case "str_before "*
+    _oac_parse_2args "str_before"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}%%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    return 0
+
   case "str_before_last "*
     _oac_parse_2args "str_before_last"
     _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    return 0
+
+  case "str_after "*
+    _oac_parse_2args "str_after"
+    _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}#*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
   case "str_after_last "*
     _oac_parse_2args "str_after_last"
     _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
@@ -991,6 +1022,9 @@ optimize_static() {
   case "str_contains "*
     _oac_parse_2args "str_contains"
     _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\"*) ;; *) false;; esac"
     return 0
@@ -998,6 +1032,9 @@ optimize_static() {
   case "str_starts "*
     _oac_parse_2args "str_starts"
     _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in \"${_oac_delim}\"*) ;; *) false;; esac"
     return 0
@@ -1005,51 +1042,64 @@ optimize_static() {
   case "str_ends "*
     _oac_parse_2args "str_ends"
     _oac_unquote "$_oac_arg2" || _oac_fail || return 1; _oac_delim="$R"
+    switch $_oac_delim
+    case '"'|"'": _oac_fail; return 1
+    end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="case \"\$${_oac_varname}\" in *\"${_oac_delim}\") ;; *) false;; esac"
     return 0
 
   case "str_trim "*
-    str_after "$_oac_stmt" "str_trim "; _oac_arg1="$R"
+    _oac_parse_1arg "str_trim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
     return 0
 
   case "str_ltrim "*
-    str_after "$_oac_stmt" "str_ltrim "; _oac_arg1="$R"
+    _oac_parse_1arg "str_ltrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
     return 0
 
   case "str_rtrim "*
-    str_after "$_oac_stmt" "str_rtrim "; _oac_arg1="$R"
+    _oac_parse_1arg "str_rtrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
     return 0
 
   case "str_indent "*
-    str_after "$_oac_stmt" "str_indent "; _oac_arg1="$R"
+    _oac_parse_1arg "str_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
     R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
     return 0
 
+  case "str_split_indent "*
+    _oac_parse_1arg "str_split_indent"
+    _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
+    R="R=\"\${${_oac_varname}%%[![:space:]]*}\"; R2=\"\${${_oac_varname}#\"\$R\"}\""
+    return 0
+
   case "file_exists "*
-    str_after "$_oac_stmt" "file_exists "; _oac_path="$R"
+    _oac_parse_1arg "file_exists"
+    _oac_path="$_oac_arg1"
     R="[ -f ${_oac_path} ]"
     return 0
 
   case "dir_exists "*
-    str_after "$_oac_stmt" "dir_exists "; _oac_path="$R"
+    _oac_parse_1arg "dir_exists"
+    _oac_path="$_oac_arg1"
     R="[ -d ${_oac_path} ]"
     return 0
 
   case "file_executable "*
-    str_after "$_oac_stmt" "file_executable "; _oac_path="$R"
+    _oac_parse_1arg "file_executable"
+    _oac_path="$_oac_arg1"
     R="[ -x ${_oac_path} ]"
     return 0
 
   case "path_writable "*
-    str_after "$_oac_stmt" "path_writable "; _oac_path="$R"
+    _oac_parse_1arg "path_writable"
+    _oac_path="$_oac_arg1"
     R="[ -w ${_oac_path} ]"
     return 0
 
@@ -1067,9 +1117,7 @@ optimize_static() {
     R="[ -z \"\${${_oac_name}+x}\" ] && ${_oac_name}=${_oac_val}"
     return 0
 
-  default
-    R="$_oac_stmt"
-    return 1
+  default: R="$_oac_stmt"; return 1
   end
 }
 
@@ -1078,9 +1126,13 @@ transform_semicolon_parts() {
   _tsp_out=""
   _tsp_sep=""
   
-  while str_contains "$_tsp_line" "; "
-    str_before "$_tsp_line" "; "; _tsp_part="$R"
-    str_after "$_tsp_line" "; "; _tsp_line="$R"
+  while :; do
+    switch $_tsp_line
+    case *"; "*
+    default: break
+    end
+    _tsp_part="${_tsp_line%%; *}"
+    _tsp_line="${_tsp_line#*"; "}"
     if ! optimize_static "$_tsp_part"
       transform_statement "$_tsp_part"
     end
@@ -1096,15 +1148,24 @@ transform_semicolon_parts() {
 }
 
 _parse_colon_syntax() {
-  str_contains "$1" ": " || return 1
+  switch $1
+  case *": "*
+  default: return 1
+  end
   _pcs_search="$1" _pcs_prefix=""
-  while str_contains "$_pcs_search" ": "
-    str_before "$_pcs_search" ": "; _pcs_cond="$_pcs_prefix$R"
-    str_after "$_pcs_search" ": "; _pcs_after="$R"
+  while :
+    switch $_pcs_search
+    case *": "*
+    default: break
+    end
+    _pcs_cond="$_pcs_prefix${_pcs_search%%": "*}"
+    _pcs_after="${_pcs_search#*": "}"
     if ! _in_quotes "$_pcs_cond"
-      case "$_pcs_after" in '"'*|"'"*) ;; *)
+      switch $_pcs_after
+      case '"'*|"'"*
+      default
         _pcs_body="$_pcs_after"; return 0
-      esac
+      end
     end
     _pcs_prefix="$_pcs_cond: "; _pcs_search="$_pcs_after"
   done
@@ -1113,25 +1174,24 @@ _parse_colon_syntax() {
 
 _strip_inline_end() {
   _has_inline_end=0
-  if str_ends "$_pcs_body" "; end"
-    str_before_last "$_pcs_body" "; end"; _pcs_body="$R"
+  switch $_pcs_body
+  case *"; end"
+    _pcs_body="${_pcs_body%"; end"}"
     _has_inline_end=1
   end
 }
 
 emit_with_try_check() {
-  str_indent "$1"; _ewtc_indent="$R"
-  str_ltrim "$1"; _ewtc_stmt="$R"
+  str_split_indent "$1"; _ewtc_indent="$R"; _ewtc_stmt="$R2"
   if [ -z "$_ewtc_stmt" ]; then
     printf '\n'
     return
   fi
-  case $_ewtc_stmt in
-  "{"|"}"|*"() {")
+  switch $_ewtc_stmt
+  case "{"|"}"|*"() {"
     printf '%s\n' "$1"
     return
-    ;;
-  esac
+  end
   transform_semicolon_parts "$_ewtc_stmt"
   _ewtc_transformed="${_ewtc_indent}$R"
   if in_try_block; then
@@ -1144,18 +1204,20 @@ emit_with_try_check() {
 
 is_comparison() {
   switch $1
-  case *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*
-    return 0
-  default
-    return 1
+  case *" <= "*|*" < "*|*" >= "*|*" > "*|*" == "*|*" != "*: return 0
+  default: return 1
   end
 }
 
 escape_quotes() {
   _eq_in="$1" _eq_out=""
-  while str_contains "$_eq_in" '"'
-    str_before "$_eq_in" '"'; _eq_out="$_eq_out$R\\\""
-    str_after "$_eq_in" '"'; _eq_in="$R"
+  while :
+    switch $_eq_in
+    case *'"'*
+    default: break
+    end
+    _eq_out="$_eq_out${_eq_in%%\"*}\\\""
+    _eq_in="${_eq_in#*\"}"
   done
   R="$_eq_out$_eq_in"
 }
@@ -1166,28 +1228,22 @@ parse_comparison() {
   
   switch $_pc_cond
   case *" == "*
-    str_before "$_pc_cond" " == "; _ec_left="$R"
-    str_after "$_pc_cond" " == "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" == "*}"; _ec_right="${_pc_cond#*" == "}"
     _ec_op="==" _ec_shell_op="="
   case *" != "*
-    str_before "$_pc_cond" " != "; _ec_left="$R"
-    str_after "$_pc_cond" " != "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" != "*}"; _ec_right="${_pc_cond#*" != "}"
     _ec_op="!=" _ec_shell_op="!="
   case *" <= "*
-    str_before "$_pc_cond" " <= "; _ec_left="$R"
-    str_after "$_pc_cond" " <= "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" <= "*}"; _ec_right="${_pc_cond#*" <= "}"
     _ec_op="<=" _ec_shell_op="-le"
   case *" >= "*
-    str_before "$_pc_cond" " >= "; _ec_left="$R"
-    str_after "$_pc_cond" " >= "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" >= "*}"; _ec_right="${_pc_cond#*" >= "}"
     _ec_op=">=" _ec_shell_op="-ge"
   case *" < "*
-    str_before "$_pc_cond" " < "; _ec_left="$R"
-    str_after "$_pc_cond" " < "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" < "*}"; _ec_right="${_pc_cond#*" < "}"
     _ec_op="<" _ec_shell_op="-lt"
   case *" > "*
-    str_before "$_pc_cond" " > "; _ec_left="$R"
-    str_after "$_pc_cond" " > "; _ec_right="$R"
+    _ec_left="${_pc_cond%%" > "*}"; _ec_right="${_pc_cond#*" > "}"
     _ec_op=">" _ec_shell_op="-gt"
   default
     return 1
@@ -1197,30 +1253,20 @@ parse_comparison() {
 strip_outer_quotes() {
   _soq_val="$1"
   switch $_soq_val
-  case '"'*'"'
-    _soq_val="${_soq_val#\"}"
-    R="${_soq_val%\"}"
-  case "'"*"'"
-    _soq_val="${_soq_val#\'}"
-    R="${_soq_val%\'}"
-  default
-    R="$_soq_val"
+  case '"'*'"': _soq_val="${_soq_val#\"}"; R="${_soq_val%\"}"
+  case "'"*"'": _soq_val="${_soq_val#\'}"; R="${_soq_val%\'}"
+  default: R="$_soq_val"
   end
 }
 
 format_test_operand() {
   _fto_val="$1"
   switch $_fto_val
-  case '"'*'"'
-    R="$_fto_val"
-  case "'"*"'"
-    R="$_fto_val"
-  case '$'*
-    R="\"$_fto_val\""
-  case *[!a-zA-Z0-9_.-]*|""
-    R="\"$_fto_val\""
-  default
-    R="$_fto_val"
+  case '"'*'"': R="$_fto_val"
+  case "'"*"'": R="$_fto_val"
+  case '$'*: R="\"$_fto_val\""
+  case *[!a-zA-Z0-9_.-]*|"": R="\"$_fto_val\""
+  default: R="$_fto_val"
   end
 }
 
@@ -1234,16 +1280,14 @@ is_simple_var() {
       case ""|*[!a-zA-Z0-9_]*: return 1
       default: return 0
     end
-  case '$'[0-9]
-    return 0
+  case '$'[0-9]: return 0
   case '$'[a-zA-Z_]*
     _isv_inner="${_isv_cond#\$}"
     switch $_isv_inner
       case *[!a-zA-Z0-9_]*: return 1
       default: return 0
     end
-  default
-    return 1
+  default: return 1
   end
 }
 
@@ -1267,51 +1311,61 @@ emit_single_condition() {
     format_test_operand "$_ec_left"; _emit_left="$R"
     format_test_operand "$_ec_right"; _emit_right="$R"
     R="[ ${_emit_left} ${_ec_shell_op} ${_emit_right} ]"
-  elif str_starts "$_esc_cond" "nonempty "
-    str_after "$_esc_cond" "nonempty "; _esc_target="$R"
-    format_test_operand "$_esc_target"; _emit_target="$R"
-    R="[ -n ${_emit_target} ]"
-  elif is_simple_var "$_esc_cond"
-    R="[ -n \"${_esc_cond}\" ]"
-  elif str_starts "$_esc_cond" "! "
-    str_after "$_esc_cond" "! "; _esc_negated="$R"
-    if is_simple_var "$_esc_negated"
-      R="[ -z \"${_esc_negated}\" ]"
-    else
-      R="$_esc_cond"
-    end
   else
-    R="$_esc_cond"
+    switch $_esc_cond
+    case "nonempty "*
+      _esc_target="${_esc_cond#"nonempty "}"
+      format_test_operand "$_esc_target"; _emit_target="$R"
+      R="[ -n ${_emit_target} ]"
+    case "! "*
+      _esc_negated="${_esc_cond#"! "}"
+      if is_simple_var "$_esc_negated"
+        R="[ -z \"${_esc_negated}\" ]"
+      elif optimize_static "$_esc_negated"
+        R="! $R"
+      else
+        R="$_esc_cond"
+      end
+    default
+      if is_simple_var "$_esc_cond"
+        R="[ -n \"${_esc_cond}\" ]"
+      elif optimize_static "$_esc_cond"
+        return
+      else
+        R="$_esc_cond"
+      end
+    end
   end
 }
 
 emit_condition() {
   keyword="$1" condition="$2" indent="$3" suffix="$4"
   
-  if str_contains "$condition" " && " || str_contains "$condition" " || "
+  switch $condition
+  case *" && "*|*" || "*
     _emc_result="" _emc_rest="$condition" _emc_first=1 _emc_prev_op=""
     while [ -n "$_emc_rest" ]
       _emc_op=""
-      if str_contains "$_emc_rest" " && "
+      _emc_and_len=999999
+      _emc_or_len=999999
+      switch $_emc_rest
+      case *" && "*
         _emc_and_pos="${_emc_rest%% && *}"
         _emc_and_len="${#_emc_and_pos}"
-      else
-        _emc_and_len=999999
       end
-      if str_contains "$_emc_rest" " || "
+      switch $_emc_rest
+      case *" || "*
         _emc_or_pos="${_emc_rest%% || *}"
         _emc_or_len="${#_emc_or_pos}"
-      else
-        _emc_or_len=999999
       end
       
       if [ "$_emc_and_len" -lt "$_emc_or_len" ]
-        str_before "$_emc_rest" " && "; _emc_part="$R"
-        str_after "$_emc_rest" " && "; _emc_rest="$R"
+        _emc_part="${_emc_rest%%" && "*}"
+        _emc_rest="${_emc_rest#*" && "}"
         _emc_op=" && "
       elif [ "$_emc_or_len" -lt 999999 ]
-        str_before "$_emc_rest" " || "; _emc_part="$R"
-        str_after "$_emc_rest" " || "; _emc_rest="$R"
+        _emc_part="${_emc_rest%%" || "*}"
+        _emc_rest="${_emc_rest#*" || "}"
         _emc_op=" || "
       else
         _emc_part="$_emc_rest"
@@ -1328,7 +1382,7 @@ emit_condition() {
       _emc_prev_op="$_emc_op"
     done
     printf '%s\n' "${_emit_prefix}${indent}${keyword} ${_emc_result}${suffix}"
-  else
+  default
     emit_single_condition "$condition"
     printf '%s\n' "${_emit_prefix}${indent}${keyword} ${R}${suffix}"
   end
@@ -1340,26 +1394,29 @@ emit_inline_statement() {
   inline_statement="$2"
   if "$inline_statement" == "": return
 
-  str_ltrim "$inline_statement"; inline_statement="$R"
+  inline_statement="${inline_statement#"${inline_statement%%[![:space:]]*}"}"
 
-  if str_starts "$inline_statement" "if "
-    str_after "$inline_statement" "if "; inline_rest="$R"
-    if str_contains "$inline_rest" ": "
-      str_before "$inline_rest" ": "; inline_condition="$R"
-      str_after "$inline_rest" ": "; inline_body="$R"
-      str_ltrim "$inline_body"; inline_body="$R"
+  switch $inline_statement
+  case "if "*
+    inline_rest="${inline_statement#"if "}"
+    switch $inline_rest
+    case *": "*
+      inline_condition="${inline_rest%%": "*}"
+      inline_body="${inline_rest#*": "}"
+      inline_body="${inline_body#"${inline_body%%[![:space:]]*}"}"
       emit_condition "if" "$inline_condition" "$inline_indent" "; then"
       emit_with_try_check "${inline_indent}  ${inline_body}"
       single_line_if_active=1
       single_line_if_indent="$inline_indent"
       return
     end
-  elif str_starts "$inline_statement" "while "
-    str_after "$inline_statement" "while "; inline_rest="$R"
-    if str_contains "$inline_rest" ": "
-      str_before "$inline_rest" ": "; inline_condition="$R"
-      str_after "$inline_rest" ": "; inline_body="$R"
-      str_ltrim "$inline_body"; inline_body="$R"
+  case "while "*
+    inline_rest="${inline_statement#"while "}"
+    switch $inline_rest
+    case *": "*
+      inline_condition="${inline_rest%%": "*}"
+      inline_body="${inline_rest#*": "}"
+      inline_body="${inline_body#"${inline_body%%[![:space:]]*}"}"
       emit_condition "while" "$inline_condition" "$inline_indent" "; do"
       emit_with_try_check "${inline_indent}  ${inline_body}"
       printf "${inline_indent}done\n"
@@ -1387,14 +1444,17 @@ _handle_conditional() {
       single_line_if_active=1
       single_line_if_indent="$_hc_indent"
     end
-  elif str_contains "$_hc_rest" "; $_hc_suffix"
-    printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
-    if "$_hc_push" != "": push "$_hc_push"
-    if "$_hc_kw" == "while": push w
   else
-    emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
-    if "$_hc_push" != "": push "$_hc_push"
-    if "$_hc_kw" == "while": push w
+    switch $_hc_rest
+    case *"; $_hc_suffix"*
+      printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
+      if "$_hc_push" != "": push "$_hc_push"
+      if "$_hc_kw" == "while": push w
+    default
+      emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
+      if "$_hc_push" != "": push "$_hc_push"
+      if "$_hc_kw" == "while": push w
+    end
   end
 }
 
@@ -1404,16 +1464,16 @@ _close_single_line_if() {
   
   if "$_csli_indent" == "$single_line_if_indent"
     switch $_csli_stripped
-    case "elif "*|"else"*
-      _converts=0
-      if str_starts "$_csli_stripped" "elif "
-        if ! str_contains "$_csli_stripped" ": "
-          _converts=1
-        end
+    case "elif "*
+      switch $_csli_stripped
+      case *": "*
+      default
+        single_line_if_active=0
+        push i
       end
-      if "$_csli_stripped" == "else": _converts=1
-      
-      if $_converts == 1
+      return 1
+    case "else"*
+      if "$_csli_stripped" == "else"
         single_line_if_active=0
         push i
       end
@@ -1428,10 +1488,13 @@ _close_single_line_if() {
 
 _try_semi_split() {
   _tss_pat="; $1 "
-  str_contains "$stripped" "$_tss_pat" || return 1
-  str_before "$stripped" "$_tss_pat"; _tss_pre="$R"
+  switch $stripped
+  case *"$_tss_pat"*
+  default: return 1
+  end
+  R="${stripped%%"$_tss_pat"*}"; _tss_pre="$R"
   _in_quotes "$_tss_pre" && return 1
-  str_after "$stripped" "$_tss_pat"; _tss_rest="$1 $R"
+  R="${stripped#*"$_tss_pat"}"; _tss_rest="$1 $R"
   [ -n "$_tss_pre" ] && { transform_semicolon_parts "$_tss_pre"; printf '%s\n' "${indent}$R"; }
   transform_line "${indent}$_tss_rest"
 }
@@ -1439,24 +1502,30 @@ _try_semi_split() {
 _try_op_split() {
   [ -n "$_emit_prefix" ] && return 1
   _tos_pat=" $1 $2 "
-  str_contains "$stripped" "$_tos_pat" || return 1
-  str_before "$stripped" "$_tos_pat"; _tos_pre="$R"
+  switch $stripped
+  case *"$_tos_pat"*
+  default: return 1
+  end
+  R="${stripped%%"$_tos_pat"*}"; _tos_pre="$R"
   _in_quotes "$_tos_pre" && return 1
   _emit_prefix="$_tos_pre $1 "
-  str_after "$stripped" "$_tos_pat"; stripped="$2 $R"
+  R="${stripped#*"$_tos_pat"}"; stripped="$2 $R"
 }
 
 transform_line() {
   line="$1"
-  str_indent "$line"; indent="$R"
-  str_ltrim "$line"; stripped="$R"
+  str_split_indent "$line"; indent="$R"; stripped="$R2"
   
   _close_single_line_if "$indent" "$stripped"
 
-  case "$stripped" in "#"*)
-    case "$stripped" in *"__RUNTIME_"*) printf '%s\n' "$line" ;; esac
+  switch $stripped
+  case "#"*
+    switch $stripped
+    case *"__RUNTIME_"*
+      printf '%s\n' "$line"
+    end
     return
-  esac
+  end
 
   _try_semi_split while && return
   _try_semi_split if && return
@@ -1468,16 +1537,15 @@ transform_line() {
   
   switch $stripped
   
-  case ""
-    printf '\n'
+  case "": printf '\n'
   
-  case "#"*
-    printf '%s\n' "$line"
+  case "#"*: printf '%s\n' "$line"
   
   case "end"
     peek
     switch $R
-    case s|S: printf "${indent}  ;;\n${indent}esac\n"
+    case s: printf "${indent}esac\n"
+    case S: printf "${indent};;esac\n"
     case i: printf "${indent}fi\n"
     case f: printf "${indent}done\n"
     case w: printf "${indent}done\n"; emit_try_break "$indent"
@@ -1497,14 +1565,27 @@ transform_line() {
   case "else:"*|"default:"*
     if str_starts "$stripped" "else:"
       printf "${indent}else\n"
+      str_after "$stripped" ":"; str_ltrim "$R"
+      if "$R" != "": emit_inline_statement "${indent}  " "$R"
     else
       peek
       if "$R" == "S": printf "${indent}  ;;\n"
-      switch_mark_used
-      printf "${indent}*)\n"
+      str_after "$stripped" ":"; str_ltrim "$R"; _default_body="$R"
+      if "$_default_body" != ""
+        if _is_simple_stmt "$_default_body"
+          transform_semicolon_parts "$_default_body"
+          printf '%s\n' "${indent}*)$R;;"
+          switch_mark_closed
+        else
+          switch_mark_used
+          printf "${indent}*)\n"
+          emit_inline_statement "${indent}  " "$_default_body"
+        end
+      else
+        switch_mark_used
+        printf "${indent}*)\n"
+      end
     end
-    str_after "$stripped" ":"; str_ltrim "$R"
-    if "$R" != "": emit_inline_statement "${indent}  " "$R"
   
   case "try"
     try_depth_inc
@@ -1558,17 +1639,26 @@ transform_line() {
     switch $R
     case s|S
       if "$R" == "S": printf "${indent}  ;;\n"
-      switch_mark_used
       str_after "$stripped" "case "; _case_rest="$R"
       if _parse_colon_syntax "$_case_rest"
         if "$_pcs_body" != ""
-          printf '%s\n' "${indent}${_pcs_cond})"
-          emit_inline_statement "${indent}  " "$_pcs_body"
+          if _is_simple_stmt "$_pcs_body"
+            # Compact output for simple statements
+            transform_semicolon_parts "$_pcs_body"
+            printf '%s\n' "${indent}${_pcs_cond})$R;;"
+            switch_mark_closed
+          else
+            switch_mark_used
+            printf '%s\n' "${indent}${_pcs_cond})"
+            emit_inline_statement "${indent}  " "$_pcs_body"
+          end
         else
+          switch_mark_used
           _case_rest="${_case_rest%:}"
           printf '%s\n' "${indent}${_case_rest})"
         end
       else
+        switch_mark_used
         _case_rest="${_case_rest%:}"
         printf '%s\n' "${indent}${_case_rest})"
       end
@@ -1610,8 +1700,7 @@ transform_line() {
     transform_semicolon_parts "$stripped"
     printf '%s\n' "${indent}$R"
   
-  default
-    emit_with_try_check "$line"
+  default: emit_with_try_check "$line"
   
   end
 }
@@ -1640,7 +1729,7 @@ end
 _extract_fn_name() { str_before "$1" "()"; str_ltrim "$R"; }
 
 _rt_need_fn() {
-  switch "$_rt_needed"
+  switch $_rt_needed
   case *" $1 "*: return
   end
   _rt_needed="$_rt_needed $1 "
@@ -1657,7 +1746,7 @@ emit_runtime_stripped() {
     if str_starts "$_ers_line" "# __RUNTIME_START__": _ers_in_rt=1; continue
     if str_starts "$_ers_line" "# __RUNTIME_END__": break
     if $_ers_in_rt == 0: continue
-    switch "$_ers_line"
+    switch $_ers_line
     case *"() {"*"}"
       _extract_fn_name "$_ers_line"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
@@ -1682,7 +1771,7 @@ emit_runtime_stripped() {
     _ers_deps=""
     for _ers_other in $_ers_all_fns
       if "$_ers_fn" != "$_ers_other"
-        switch "$_ers_body"
+        switch $_ers_body
         case *"$_ers_other"*
           _ers_deps="$_ers_deps $_ers_other"
         end
@@ -1693,14 +1782,14 @@ emit_runtime_stripped() {
   
   _rt_needed=" "
   for _ers_fn in $_ers_all_fns
-    switch "$_ers_source"
+    switch $_ers_source
     case *"$_ers_fn"*: _rt_need_fn "$_ers_fn"
     end
   done
   
-  _ers_combined="$_ers_source"
+  _ers_combined=$_ers_source
   for _ers_fn in $_ers_all_fns
-    switch "$_rt_needed"
+    switch $_rt_needed
     case *" $_ers_fn "*
       eval "_ers_combined=\"\$_ers_combined \$_rt_body_$_ers_fn\""
     end
@@ -1717,16 +1806,16 @@ emit_runtime_stripped() {
       if str_starts "$_ers_line" "# __RUNTIME_END__"
         _ers_emit=2
       else
-        switch "$_ers_line"
+        switch $_ers_line
         case *"() {"*"}"
           _extract_fn_name "$_ers_line"; _ers_fn="$R"
-          switch "$_rt_needed"
+          switch $_rt_needed
           case *" $_ers_fn "*
             printf '%s\n' "$_ers_line"
           end
         case *"() {"*
           _extract_fn_name "$_ers_line"; _ers_fn="$R"
-          switch "$_rt_needed"
+          switch $_rt_needed
           case *" $_ers_fn "*
             _ers_skip=0
             _ers_in_func=1
@@ -1750,7 +1839,7 @@ emit_runtime_stripped() {
         case *"="*
           if $_ers_in_func == 0
             str_before "$_ers_line" "="; _ers_varname="$R"
-            switch "$_ers_combined"
+            switch $_ers_combined
             case *'$'"$_ers_varname"*|*'$'"{$_ers_varname"*
               printf '%s\n' "$_ers_line"
             end

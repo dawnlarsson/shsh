@@ -2724,8 +2724,9 @@ test "colon-space in string should not transform" {
   _colon_space=":"
   _colon_space="$_colon_space "
   _raw_out=$(printf '%s\n' "if str_contains \"\$x\" \"$_colon_space\"" | "$_shsh" raw -)
-  # Should pass through unchanged (or just add 'then' for if, not treat ": " as body separator)
-  if str_contains "$_raw_out" "str_contains \"\$x\" \"$_colon_space\""
+  # Should pass through unchanged OR be optimized to case, but not treat ": " as body separator
+  _optimized_pattern='*": "'
+  if str_contains "$_raw_out" "str_contains \"\$x\" \"$_colon_space\"" || str_contains "$_raw_out" "$_optimized_pattern"
     test_pass
   else
     test_fail "colon-space in string was transformed: $_raw_out"
