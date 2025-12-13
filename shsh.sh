@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.58.0"
+VERSION="0.59.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -805,6 +805,8 @@ _module_name_from_path() {
 }
 
 _transform_module_call() {
+  case "$1" in *"."*) ;; *) R="$1"; return ;; esac
+
   _tmc_line="$1"
   _tmc_out=""
   _tmc_rest="$_tmc_line"
@@ -968,6 +970,12 @@ emit_try_break() {
 _transform_arith() {
   _ta_stmt="$1"
 
+  case $_ta_stmt in
+  *"++"*|*"--"*|*" += "*|*" -= "*|*" *= "*|*" /= "*|*" %= "*)
+    ;;
+  *)return 1;;
+  esac
+
   _ta_suffix="" _ta_delta=""
   case $_ta_stmt in
   *"++")_ta_suffix="++"; _ta_delta="+ 1";;
@@ -1003,6 +1011,12 @@ _transform_arith() {
 
 transform_statement() {
   _ts_stmt="${1#"${1%%[![:space:]]*}"}"
+
+  case $_ts_stmt in
+  *" = "*|*"++"*|*"--"*|*" += "*|*" -= "*|*" *= "*|*" /= "*|*" %= "*)
+    ;;
+  *)R="$_ts_stmt"; return;;
+  esac
 
   if _transform_arith "$_ts_stmt"; then
     return
@@ -1064,6 +1078,11 @@ _oac_parse_3args() {
 
 optimize_static() {
   _oac_stmt="$1"
+  case ${_oac_stmt% *} in
+  array_*|map_*|str_*|default*)
+    ;;
+  *)R="$_oac_stmt"; return 1;;
+  esac
   case $_oac_stmt in
   "array_get "*)
     _oac_parse_2args "array_get"
@@ -1351,24 +1370,25 @@ _strip_inline_end() {
 }
 
 emit_with_try_check() {
-  R=${1%%[![:space:]]*}; R2=${1#"$R"}; _ewtc_indent="$R"; _ewtc_stmt="$R2"
+  _ewtc_indent="$1"; _ewtc_stmt="$2"
   if [ -z "$_ewtc_stmt" ]; then
     printf '\n'
     return
   fi
   case $_ewtc_stmt in
   "{"|"}"|*"() {")
-    printf '%s\n' "$1"
+    printf '%s\n' "${_ewtc_indent}${_ewtc_stmt}"
     return
   ;;esac
   transform_semicolon_parts "$_ewtc_stmt"
   _ewtc_transformed="${_ewtc_indent}$R"
-  if in_try_block; then
+  case $block_stack in
+  *t*)
     current_try_depth
     printf '%s || { _shsh_err_%s=$?; _shsh_brk_%s=1; break; }\n' "$_ewtc_transformed" "$R" "$R"
-  else
-    printf '%s\n' "$_ewtc_transformed"
-  fi
+    return
+  ;;esac
+  printf '%s\n' "$_ewtc_transformed"
 }
 
 is_comparison() {
@@ -1588,7 +1608,7 @@ emit_inline_statement() {
       inline_body="${inline_rest#*": "}"
       inline_body="${inline_body#"${inline_body%%[![:space:]]*}"}"
       emit_condition "if" "$inline_condition" "$inline_indent" "; then"
-      emit_with_try_check "${inline_indent}  ${inline_body}"
+      emit_with_try_check "${inline_indent}  " "${inline_body}"
       single_line_if_active=1
       single_line_if_indent="$inline_indent"
       return
@@ -1602,14 +1622,14 @@ emit_inline_statement() {
       inline_body="${inline_rest#*": "}"
       inline_body="${inline_body#"${inline_body%%[![:space:]]*}"}"
       emit_condition "while" "$inline_condition" "$inline_indent" "; do"
-      emit_with_try_check "${inline_indent}  ${inline_body}"
+      emit_with_try_check "${inline_indent}  " "${inline_body}"
       printf "${inline_indent}done\n"
       emit_try_break "$inline_indent"
       return
     ;;esac
   ;;esac
 
-  emit_with_try_check "${inline_indent}${inline_statement}"
+  emit_with_try_check "${inline_indent}" "${inline_statement}"
 }
 
 _handle_conditional() {
@@ -1618,7 +1638,7 @@ _handle_conditional() {
   if _parse_colon_syntax "$_hc_rest"; then
     _strip_inline_end
     emit_condition "$_hc_kw" "$_pcs_cond" "$_hc_indent" "; $_hc_suffix"
-    emit_with_try_check "${_hc_indent}  ${_pcs_body}"
+    emit_with_try_check "${_hc_indent}  " "${_pcs_body}"
     if [ "$_hc_kw" = "while" ]; then
       printf "${_hc_indent}done\n"
       emit_try_break "$_hc_indent"
@@ -1859,7 +1879,7 @@ transform_line() {
     elif _parse_colon_syntax "$_for_rest"; then
       _strip_inline_end
       printf '%s\n' "${indent}for ${_pcs_cond}; do"
-      emit_with_try_check "${indent}  ${_pcs_body}"
+      emit_with_try_check "${indent}  " "${_pcs_body}"
       printf "${indent}done\n"
       emit_try_break "$indent"
     else
@@ -1943,7 +1963,7 @@ transform_line() {
     transform_semicolon_parts "$stripped"
     printf '%s\n' "${indent}$R"
     ;;
-  *)emit_with_try_check "$line";;
+  *)emit_with_try_check "$indent" "$stripped";;
   esac
 }
 
