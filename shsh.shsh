@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.57.0"
+VERSION="0.58.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -749,6 +749,65 @@ test_dir_exists() {
   fi
 }
 # __RUNTIME_END__
+
+# Error handling
+_shsh_errors=0
+_shsh_line_num=0
+_shsh_file=""
+_shsh_line_1=""
+_shsh_line_2=""
+_shsh_line_3=""
+
+# ANSI colors (use printf to create actual escape sequences)
+_shsh_c_reset="$(printf '\033[0m')"
+_shsh_c_red="$(printf '\033[1;31m')"
+_shsh_c_dim="$(printf '\033[2m')"
+_shsh_c_bg_red="$(printf '\033[48;5;52m')"
+_shsh_c_white="$(printf '\033[1;37m')"
+
+_shsh_store_line() {
+  _shsh_line_1="$_shsh_line_2"
+  _shsh_line_2="$_shsh_line_3"
+  _shsh_line_3="$1"
+}
+
+_shsh_print_context() {
+  _spc_ln="$_shsh_line_num"
+  _spc_width=4
+  
+  # Print line before (if we have it and line > 1)
+  if [ "$_spc_ln" -gt 1 ] && [ -n "$_shsh_line_2" ]
+    printf '%s%4d │ %s%s\n' "$_shsh_c_dim" "$((_spc_ln - 1))" "$_shsh_line_2" "$_shsh_c_reset" >&2
+  end
+  
+  # Print error line with red background
+  printf '%s%s%4d │ %s%s\n' "$_shsh_c_bg_red" "$_shsh_c_white" "$_spc_ln" "$_shsh_line_3" "$_shsh_c_reset" >&2
+}
+
+_shsh_error() {
+  _shsh_errors=$((_shsh_errors + 1))
+  
+  # Print header
+  if [ -n "$_shsh_file" ]
+    printf '\n%serror%s: %s\n' "$_shsh_c_red" "$_shsh_c_reset" "$1" >&2
+    printf '  %s--> %s:%d%s\n' "$_shsh_c_dim" "$_shsh_file" "$_shsh_line_num" "$_shsh_c_reset" >&2
+  else
+    printf '\n%serror%s: %s\n' "$_shsh_c_red" "$_shsh_c_reset" "$1" >&2
+    printf '  %s--> line %d%s\n' "$_shsh_c_dim" "$_shsh_line_num" "$_shsh_c_reset" >&2
+  end
+  
+  # Print context
+  _shsh_print_context
+  printf '\n' >&2
+}
+
+_shsh_warn() {
+  if [ -n "$_shsh_file" ]
+    printf 'shsh: %s:%d: warning: %s\n' "$_shsh_file" "$_shsh_line_num" "$1" >&2
+  else
+    printf 'shsh: line %d: warning: %s\n' "$_shsh_line_num" "$1" >&2
+  end
+}
 
 block_stack=""
 single_line_if_active=0
@@ -1725,21 +1784,25 @@ transform_line() {
     if [ -f "$_use_path" ]
       _transform_module_file "$_use_path" "$_use_module" < "$_use_path" | transform
     else
-      printf '%s\n' "# ERROR: Module not found: $_use_path" >&2
+      _shsh_error "module not found: $_use_path"
     end
   
   case "end"
     peek
-    switch $R
-    case s: printf "${indent}esac\n"
-    case S: printf "${indent};;esac\n"
-    case i: printf "${indent}fi\n"
-    case f: printf "${indent}done\n"
-    case w: printf "${indent}done\n"; emit_try_break "$indent"
-    case c: printf "${indent}fi\n"; try_depth_dec
-    case t: printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec
+    if [ -z "$R" ]
+      _shsh_error "unexpected 'end' without matching block"
+    else
+      switch $R
+      case s: printf "${indent}esac\n"
+      case S: printf "${indent};;esac\n"
+      case i: printf "${indent}fi\n"
+      case f: printf "${indent}done\n"
+      case w: printf "${indent}done\n"; emit_try_break "$indent"
+      case c: printf "${indent}fi\n"; try_depth_dec
+      case t: printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec
+      end
+      pop
     end
-    pop
   
   case "done"
     printf "${indent}done\n"
@@ -1790,7 +1853,7 @@ transform_line() {
       pop
       push c
     else
-      printf '%s\n' "$line"
+      _shsh_error "'catch' without matching 'try'"
     end
   
   case "if "*
@@ -1900,8 +1963,17 @@ transform() {
   test_block_name=""
   _has_tests=0
   _loaded_modules=""
+  _shsh_line_num=0
+  _shsh_errors=0
+  _shsh_line_1=""
+  _shsh_line_2=""
+  _shsh_line_3=""
   
-  while IFS= read -r current_line || nonempty "$current_line": transform_line "$current_line"
+  while IFS= read -r current_line || nonempty "$current_line"
+    _shsh_line_num=$((_shsh_line_num + 1))
+    _shsh_store_line "$current_line"
+    transform_line "$current_line"
+  done
   
   if $single_line_if_active == 1: printf "${single_line_if_indent}fi\n"
   if $_has_tests == 1: printf "test_end\n"
@@ -1909,6 +1981,7 @@ transform() {
 
 if file_exists "$1"
   script="$1"
+  _shsh_file="$script"
   shift
   eval "$(transform < "$script")"
   exit
@@ -2065,12 +2138,18 @@ emit_runtime() {
 switch $1
   case raw
     if "$2" == "" || "$2" == "-": transform
-    else: transform < "$2"
+    else
+      _shsh_file="$2"
+      transform < "$2"
+    end
   case build
     printf '#!/bin/sh\n'
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     if "$2" == "" || "$2" == "-": _es_code="$(transform)"
-    else: _es_code="$(transform < "$2")"
+    else
+      _shsh_file="$2"
+      _es_code="$(transform < "$2")"
+    end
     emit_runtime_stripped "$_es_code"
     printf "$_es_code\n"
   case build_full
@@ -2078,7 +2157,10 @@ switch $1
     printf 'if [ -z "$_SHSH_DASH" ] && command -v dash >/dev/null 2>&1; then export _SHSH_DASH=1; exec dash "$0" "$@"; fi\n'
     emit_runtime
     if "$2" == "": transform
-    else: transform < "$2"
+    else
+      _shsh_file="$2"
+      transform < "$2"
+    end
   case -
     eval "$(transform)"
   case version|install|update|uninstall|""|--*|-*

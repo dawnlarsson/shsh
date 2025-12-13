@@ -6066,6 +6066,51 @@ test "module chained internal calls" {
   test_equals "$R" "abc"
 }
 
+echo
+echo "=== Error Reporting ==="
+
+test "error reports line number" {
+  _err="$(echo 'echo ok
+end' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "line 2"
+}
+
+test "error reports file path" {
+  echo 'end' > /tmp/shsh_err_test.shsh
+  _err="$(sh "$_shsh" raw /tmp/shsh_err_test.shsh 2>&1 >/dev/null)"
+  test_contains "$_err" "/tmp/shsh_err_test.shsh"
+  rm -f /tmp/shsh_err_test.shsh
+}
+
+test "error for unexpected end" {
+  _err="$(echo 'end' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "unexpected 'end'"
+}
+
+test "error for missing module" {
+  _err="$(echo 'use nonexistent_module_12345.shsh' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "module not found"
+}
+
+test "error for catch without try" {
+  _err="$(echo 'catch' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "catch"
+  test_contains "$_err" "without"
+}
+
+test "error shows context line" {
+  _err="$(echo 'x=1
+y=2
+end' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "y=2"
+}
+
+test "error shows error line" {
+  _err="$(echo 'x=1
+end' | sh "$_shsh" raw 2>&1 >/dev/null)"
+  test_contains "$_err" "end"
+}
+
 
 # Nested inline control structures are not yet supported
 # test "inline for with break simulation" {

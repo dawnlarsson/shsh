@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.57.0"
+VERSION="0.58.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -737,6 +737,59 @@ test_dir_exists() {
   fi
 }
 # __RUNTIME_END__
+
+_shsh_errors=0
+_shsh_line_num=0
+_shsh_file=""
+_shsh_line_1=""
+_shsh_line_2=""
+_shsh_line_3=""
+
+_shsh_c_reset="$(printf '\033[0m')"
+_shsh_c_red="$(printf '\033[1;31m')"
+_shsh_c_dim="$(printf '\033[2m')"
+_shsh_c_bg_red="$(printf '\033[48;5;52m')"
+_shsh_c_white="$(printf '\033[1;37m')"
+
+_shsh_store_line() {
+  _shsh_line_1="$_shsh_line_2"
+  _shsh_line_2="$_shsh_line_3"
+  _shsh_line_3="$1"
+}
+
+_shsh_print_context() {
+  _spc_ln="$_shsh_line_num"
+  _spc_width=4
+
+  if [ "$_spc_ln" -gt 1 ] && [ -n "$_shsh_line_2" ]; then
+    printf '%s%4d │ %s%s\n' "$_shsh_c_dim" "$((_spc_ln - 1))" "$_shsh_line_2" "$_shsh_c_reset" >&2
+  fi
+
+  printf '%s%s%4d │ %s%s\n' "$_shsh_c_bg_red" "$_shsh_c_white" "$_spc_ln" "$_shsh_line_3" "$_shsh_c_reset" >&2
+}
+
+_shsh_error() {
+  _shsh_errors=$((_shsh_errors + 1))
+
+  if [ -n "$_shsh_file" ]; then
+    printf '\n%serror%s: %s\n' "$_shsh_c_red" "$_shsh_c_reset" "$1" >&2
+    printf '  %s--> %s:%d%s\n' "$_shsh_c_dim" "$_shsh_file" "$_shsh_line_num" "$_shsh_c_reset" >&2
+  else
+    printf '\n%serror%s: %s\n' "$_shsh_c_red" "$_shsh_c_reset" "$1" >&2
+    printf '  %s--> line %d%s\n' "$_shsh_c_dim" "$_shsh_line_num" "$_shsh_c_reset" >&2
+  fi
+
+  _shsh_print_context
+  printf '\n' >&2
+}
+
+_shsh_warn() {
+  if [ -n "$_shsh_file" ]; then
+    printf 'shsh: %s:%d: warning: %s\n' "$_shsh_file" "$_shsh_line_num" "$1" >&2
+  else
+    printf 'shsh: line %d: warning: %s\n' "$_shsh_line_num" "$1" >&2
+  fi
+}
 
 block_stack=""
 single_line_if_active=0
@@ -1712,21 +1765,25 @@ transform_line() {
     if [ -f "$_use_path" ]; then
       _transform_module_file "$_use_path" "$_use_module" < "$_use_path" | transform
     else
-      printf '%s\n' "# ERROR: Module not found: $_use_path" >&2
+      _shsh_error "module not found: $_use_path"
     fi
     ;;
   "end")
     peek
-    case $R in
-    s)printf "${indent}esac\n";;
-    S)printf "${indent};;esac\n";;
-    i)printf "${indent}fi\n";;
-    f)printf "${indent}done\n";;
-    w)printf "${indent}done\n"; emit_try_break "$indent";;
-    c)printf "${indent}fi\n"; try_depth_dec;;
-    t)printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec;;
-    esac
-    pop
+    if [ -z "$R" ]; then
+      _shsh_error "unexpected 'end' without matching block"
+    else
+      case $R in
+      s)printf "${indent}esac\n";;
+      S)printf "${indent};;esac\n";;
+      i)printf "${indent}fi\n";;
+      f)printf "${indent}done\n";;
+      w)printf "${indent}done\n"; emit_try_break "$indent";;
+      c)printf "${indent}fi\n"; try_depth_dec;;
+      t)printf "${indent}_shsh_brk_$try_depth=1; done\n"; try_depth_dec;;
+      esac
+      pop
+    fi
     ;;
   "done")
     printf "${indent}done\n"
@@ -1784,7 +1841,7 @@ transform_line() {
       pop
       push c
     else
-      printf '%s\n' "$line"
+      _shsh_error "'catch' without matching 'try'"
     fi
     ;;
   "if "*)
@@ -1898,8 +1955,15 @@ transform() {
   test_block_name=""
   _has_tests=0
   _loaded_modules=""
+  _shsh_line_num=0
+  _shsh_errors=0
+  _shsh_line_1=""
+  _shsh_line_2=""
+  _shsh_line_3=""
 
   while IFS= read -r current_line || [ -n "$current_line" ]; do
+    _shsh_line_num=$((_shsh_line_num + 1))
+    _shsh_store_line "$current_line"
     transform_line "$current_line"
   done
 
@@ -1913,6 +1977,7 @@ transform() {
 
 if [ -f "$1" ]; then
   script="$1"
+  _shsh_file="$script"
   shift
   eval "$(transform < "$script")"
   exit
@@ -2092,6 +2157,7 @@ case $1 in
     if [ -z "$2" ] || [ "$2" = "-" ]; then
       transform
     else
+      _shsh_file="$2"
       transform < "$2"
     fi
     ;;
@@ -2101,6 +2167,7 @@ case $1 in
     if [ -z "$2" ] || [ "$2" = "-" ]; then
       _es_code="$(transform)"
     else
+      _shsh_file="$2"
       _es_code="$(transform < "$2")"
     fi
     emit_runtime_stripped "$_es_code"
@@ -2113,6 +2180,7 @@ case $1 in
     if [ -z "$2" ]; then
       transform
     else
+      _shsh_file="$2"
       transform < "$2"
     fi
     ;;
