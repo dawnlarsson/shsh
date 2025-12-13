@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.54.0"
+VERSION="0.55.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -19,15 +19,15 @@ _shsh_check_int() { case "$1" in ""|*[!0-9]*) return 1;; esac; }
 str_starts() { case "$1" in "$2"*);; *) return 1;; esac; }
 str_ends() { case "$1" in *"$2");; *) return 1;; esac; }
 str_contains() { case "$1" in *"$2"*);; *) return 1;; esac; }
-str_after() { R="${1#*"$2"}"; [ "$R" != "$1" ]; }
-str_before() { R="${1%%"$2"*}"; [ "$R" != "$1" ]; }
-str_after_last() { R="${1##*"$2"}"; [ "$R" != "$1" ]; }
-str_before_last() { R="${1%"$2"*}"; [ "$R" != "$1" ]; }
-str_ltrim() { R="${1#"${1%%[![:space:]]*}"}"; }
-str_rtrim() { R="${1%"${1##*[![:space:]]}"}"; }
-str_trim() { R="${1#"${1%%[![:space:]]*}"}"; R="${R%"${R##*[![:space:]]}"}"; }
-str_indent() { R="${1%%[![:space:]]*}"; }
-str_split_indent() { R="${1%%[![:space:]]*}"; R2="${1#"$R"}"; }
+str_after() { R=${1#*"$2"}; [ "$R" != "$1" ]; }
+str_before() { R=${1%%"$2"*}; [ "$R" != "$1" ]; }
+str_after_last() { R=${1##*"$2"}; [ "$R" != "$1" ]; }
+str_before_last() { R=${1%"$2"*}; [ "$R" != "$1" ]; }
+str_ltrim() { R=${1#"${1%%[![:space:]]*}"}; }
+str_rtrim() { R=${1%"${1##*[![:space:]]}"}; }
+str_trim() { R=${1#"${1%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}; }
+str_indent() { R=${1%%[![:space:]]*}; }
+str_split_indent() { R=${1%%[![:space:]]*}; R2=${1#"$R"}; }
 
 scan() {
   _sc_in=$1
@@ -841,7 +841,7 @@ transform_statement() {
       '"'*|"'"*|'$'*|""|*'='*)
         R="$_ts_stmt"
         ;;
-      *)R="${_ts_call}; ${_ts_var}=\"\$R\"";;
+      *)R="${_ts_call}; ${_ts_var}=\$R";;
       esac
     ;;esac
     ;;
@@ -849,37 +849,37 @@ transform_statement() {
   esac
 }
 
-_oac_fail() { R="$_oac_stmt"; return 1; }
+_oac_fail() { R=$_oac_stmt; return 1; }
 _oac_check_name() { case $1 in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
 _oac_check_int() { case $1 in ""|*[!0-9]*) return 1;; esac; }
 _oac_unquote() {
   case $1 in
-  '"'*'"')R="${1#\"}"; R="${R%\"}";;
-  "'"*"'")R="${1#\'}"; R="${R%\'}";;
+  '"'*'"')R=${1#\"}; R=${R%\"};;
+  "'"*"'")R=${1#\'}; R=${R%\'};;
   *)return 1;;
   esac
 }
 _oac_extract_var() {
   case $1 in
-  '"$'*'"')R="${1#\"\$}"; R="${R%\"}"; _oac_check_name "$R";;
-  '$'[a-zA-Z_]*)R="${1#\$}"; _oac_check_name "$R";;
+  '"$'*'"')R=${1#\"\$}; R=${R%\"}; _oac_check_name "$R";;
+  '$'[a-zA-Z_]*)R=${1#\$}; _oac_check_name "$R";;
   *)return 1;;
   esac
 }
 _oac_parse_1arg() {
-  R="${_oac_stmt#*"$1 "}"; [ "$R" != "$_oac_stmt" ]; _oac_arg1="$R"
+  R=${_oac_stmt#*"$1 "}; [ "$R" != "$_oac_stmt" ]; _oac_arg1=$R
 }
 _oac_parse_2args() {
-  R="${_oac_stmt#*"$1 "}"; [ "$R" != "$_oac_stmt" ]; _oac_rest="$R"
-  R="${_oac_rest%%" "*}"; [ "$R" != "$_oac_rest" ]; _oac_arg1="$R"
-  R="${_oac_rest#*" "}"; [ "$R" != "$_oac_rest" ]; _oac_arg2="$R"
+  R=${_oac_stmt#*"$1 "}; [ "$R" != "$_oac_stmt" ]; _oac_rest=$R
+  R=${_oac_rest%%" "*}; [ "$R" != "$_oac_rest" ]; _oac_arg1=$R
+  R=${_oac_rest#*" "}; [ "$R" != "$_oac_rest" ]; _oac_arg2=$R
 }
 _oac_parse_3args() {
-  R="${_oac_stmt#*"$1 "}"; [ "$R" != "$_oac_stmt" ]; _oac_rest="$R"
-  R="${_oac_rest%%" "*}"; [ "$R" != "$_oac_rest" ]; _oac_arg1="$R"
-  R="${_oac_rest#*" "}"; [ "$R" != "$_oac_rest" ]; _oac_rest="$R"
-  R="${_oac_rest%%" "*}"; [ "$R" != "$_oac_rest" ]; _oac_arg2="$R"
-  R="${_oac_rest#*" "}"; [ "$R" != "$_oac_rest" ]; _oac_arg3="$R"
+  R=${_oac_stmt#*"$1 "}; [ "$R" != "$_oac_stmt" ]; _oac_rest=$R
+  R=${_oac_rest%%" "*}; [ "$R" != "$_oac_rest" ]; _oac_arg1=$R
+  R=${_oac_rest#*" "}; [ "$R" != "$_oac_rest" ]; _oac_rest=$R
+  R=${_oac_rest%%" "*}; [ "$R" != "$_oac_rest" ]; _oac_arg2=$R
+  R=${_oac_rest#*" "}; [ "$R" != "$_oac_rest" ]; _oac_arg3=$R
 }
 
 optimize_static() {
@@ -891,7 +891,7 @@ optimize_static() {
     _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     _oac_check_int "$_oac_idx" || _oac_fail || return 1
-    R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
+    R="R=\${__shsh_${_oac_name}_${_oac_idx}}; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
     return 0
 
     ;;
@@ -901,7 +901,7 @@ optimize_static() {
     _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     _oac_check_name "$_oac_key" || _oac_fail || return 1
-    R="R=\"\${__shsh_map_${_oac_name}_${_oac_key}}\""
+    R="R=\${__shsh_map_${_oac_name}_${_oac_key}}"
     return 0
 
     ;;
@@ -919,7 +919,7 @@ optimize_static() {
     _oac_parse_1arg "array_len"
     _oac_name="$_oac_arg1"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
-    R="R=\"\${__shsh_${_oac_name}_n:-0}\""
+    R="R=\${__shsh_${_oac_name}_n:-0}"
     return 0
 
     ;;
@@ -983,7 +983,7 @@ optimize_static() {
     '"'|"'")_oac_fail; return 1;;
     esac
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}%%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
     ;;
@@ -994,7 +994,7 @@ optimize_static() {
     '"'|"'")_oac_fail; return 1;;
     esac
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
     ;;
@@ -1005,7 +1005,7 @@ optimize_static() {
     '"'|"'")_oac_fail; return 1;;
     esac
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}#*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
     ;;
@@ -1016,7 +1016,7 @@ optimize_static() {
     '"'|"'")_oac_fail; return 1;;
     esac
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}##*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
     ;;
@@ -1056,35 +1056,35 @@ optimize_static() {
   "str_trim "*)
     _oac_parse_1arg "str_trim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
+    R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}; R=\${R%\"\${R##*[![:space:]]}\"}"
     return 0
 
     ;;
   "str_ltrim "*)
     _oac_parse_1arg "str_ltrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
+    R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}"
     return 0
 
     ;;
   "str_rtrim "*)
     _oac_parse_1arg "str_rtrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
+    R="R=\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}"
     return 0
 
     ;;
   "str_indent "*)
     _oac_parse_1arg "str_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
+    R="R=\${${_oac_varname}%%[![:space:]]*}"
     return 0
 
     ;;
   "str_split_indent "*)
     _oac_parse_1arg "str_split_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%[![:space:]]*}\"; R2=\"\${${_oac_varname}#\"\$R\"}\""
+    R="R=\${${_oac_varname}%%[![:space:]]*}; R2=\${${_oac_varname}#\"\$R\"}"
     return 0
 
     ;;
@@ -1201,7 +1201,7 @@ _strip_inline_end() {
 }
 
 emit_with_try_check() {
-  R="${1%%[![:space:]]*}"; R2="${1#"$R"}"; _ewtc_indent="$R"; _ewtc_stmt="$R2"
+  R=${1%%[![:space:]]*}; R2=${1#"$R"}; _ewtc_indent="$R"; _ewtc_stmt="$R2"
   if [ -z "$_ewtc_stmt" ]; then
     printf '\n'
     return
@@ -1563,7 +1563,7 @@ _try_op_split() {
 
 transform_line() {
   line="$1"
-  R="${line%%[![:space:]]*}"; R2="${line#"$R"}"; indent="$R"; stripped="$R2"
+  R=${line%%[![:space:]]*}; R2=${line#"$R"}; indent="$R"; stripped="$R2"
 
   _close_single_line_if "$indent" "$stripped"
 
@@ -1620,7 +1620,7 @@ transform_line() {
   "else:"*|"default:"*)
     if case "$stripped" in "else:"*) ;; *) false;; esac; then
       printf "${indent}else\n"
-      R="${stripped#*":"}"; [ "$R" != "$stripped" ]; R="${R#"${R%%[![:space:]]*}"}"
+      R=${stripped#*":"}; [ "$R" != "$stripped" ]; R=${R#"${R%%[![:space:]]*}"}
       if [ -n "$R" ]; then
         emit_inline_statement "${indent}  " "$R"
       fi
@@ -1629,7 +1629,7 @@ transform_line() {
       if [ "$R" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
-      R="${stripped#*":"}"; [ "$R" != "$stripped" ]; R="${R#"${R%%[![:space:]]*}"}"; _default_body="$R"
+      R=${stripped#*":"}; [ "$R" != "$stripped" ]; R=${R#"${R%%[![:space:]]*}"}; _default_body="$R"
       if [ -n "$_default_body" ]; then
         if _is_simple_stmt "$_default_body"; then
           transform_semicolon_parts "$_default_body"
@@ -1665,22 +1665,22 @@ transform_line() {
 
     ;;
   "if "*)
-    R="${stripped#*"if "}"; [ "$R" != "$stripped" ]
+    R=${stripped#*"if "}; [ "$R" != "$stripped" ]
     _handle_conditional "if" "$R" "$indent" "then" "i"
 
     ;;
   "elif "*)
-    R="${stripped#*"elif "}"; [ "$R" != "$stripped" ]
+    R=${stripped#*"elif "}; [ "$R" != "$stripped" ]
     _handle_conditional "elif" "$R" "$indent" "then" ""
 
     ;;
   "while "*)
-    R="${stripped#*"while "}"; [ "$R" != "$stripped" ]
+    R=${stripped#*"while "}; [ "$R" != "$stripped" ]
     _handle_conditional "while" "$R" "$indent" "do" ""
 
     ;;
   "for "*)
-    R="${stripped#*"for "}"; [ "$R" != "$stripped" ]; _for_rest="$R"
+    R=${stripped#*"for "}; [ "$R" != "$stripped" ]; _for_rest="$R"
     if case "$stripped" in *"; do"*) ;; *) false;; esac; then
       printf '%s\n' "$line"
     elif _parse_colon_syntax "$_for_rest"; then
@@ -1696,7 +1696,7 @@ transform_line() {
 
     ;;
   "switch "*)
-    R="${stripped#*"switch "}"; [ "$R" != "$stripped" ]
+    R=${stripped#*"switch "}; [ "$R" != "$stripped" ]
     printf "${indent}case $R in\n"
     push s
 
@@ -1708,7 +1708,7 @@ transform_line() {
       if [ "$R" = "S" ]; then
         printf "${indent}  ;;\n"
       fi
-      R="${stripped#*"case "}"; [ "$R" != "$stripped" ]; _case_rest="$R"
+      R=${stripped#*"case "}; [ "$R" != "$stripped" ]; _case_rest="$R"
       if _parse_colon_syntax "$_case_rest"; then
         if [ -n "$_pcs_body" ]; then
           if _is_simple_stmt "$_pcs_body"; then
@@ -1752,8 +1752,8 @@ transform_line() {
 
     ;;
   "test "*" {"*)
-    R="${stripped#*"test "}"; [ "$R" != "$stripped" ]
-    R="${R%%" {"*}"; [ "$R" != "$R" ]; _test_name="$R"
+    R=${stripped#*"test "}; [ "$R" != "$stripped" ]
+    R=${R%%" {"*}; [ "$R" != "$R" ]; _test_name="$R"
     _test_name="${_test_name#\"}"
     _test_name="${_test_name%\"}"
     _test_name="${_test_name#\'}"
@@ -1809,7 +1809,7 @@ if [ -f "$1" ]; then
   exit
 fi
 
-_extract_fn_name() { str_before "$1" "()"; R="${R#"${R%%[![:space:]]*}"}"; }
+_extract_fn_name() { str_before "$1" "()"; R=${R#"${R%%[![:space:]]*}"}; }
 
 _rt_need_fn() {
   case $_rt_needed in
@@ -1839,8 +1839,8 @@ emit_runtime_stripped() {
     *"() {"*"}")
       _extract_fn_name "$_ers_line"; _ers_cur_fn="$R"
       _ers_all_fns="$_ers_all_fns $_ers_cur_fn"
-      R="${_ers_line#*"() { "}"; [ "$R" != "$_ers_line" ]; _ers_cur_body="$R"
-      R="${_ers_cur_body%%" }"*}"; [ "$R" != "$_ers_cur_body" ]; _ers_cur_body="$R"
+      R=${_ers_line#*"() { "}; [ "$R" != "$_ers_line" ]; _ers_cur_body="$R"
+      R=${_ers_cur_body%%" }"*}; [ "$R" != "$_ers_cur_body" ]; _ers_cur_body="$R"
       eval "_rt_body_$_ers_cur_fn=\"\$_ers_cur_body\""
       _ers_cur_fn=""
       ;;
@@ -1938,7 +1938,7 @@ emit_runtime_stripped() {
           ;;
         *"="*)
           if [ "$_ers_in_func" = 0 ]; then
-            R="${_ers_line%%"="*}"; [ "$R" != "$_ers_line" ]; _ers_varname="$R"
+            R=${_ers_line%%"="*}; [ "$R" != "$_ers_line" ]; _ers_varname="$R"
             case $_ers_combined in
             *'$'"$_ers_varname"*|*'$'"{$_ers_varname"*)
               printf '%s\n' "$_ers_line"

@@ -2163,7 +2163,7 @@ test "transpile assignment" {
 foo = str_before "x:y" ":"
 TREOF
 )
-  test_equals "$_as_transpile_out" 'str_before "x:y" ":"; foo="$R"'
+  test_equals "$_as_transpile_out" 'str_before "x:y" ":"; foo=$R'
 }
 
 test "compound ops still work" {

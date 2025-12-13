@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.54.0"
+VERSION="0.55.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -25,15 +25,15 @@ _shsh_check_int() { case "$1" in ""|*[!0-9]*) return 1;; esac; }
 str_starts() { case "$1" in "$2"*);; *) return 1;; esac; }
 str_ends() { case "$1" in *"$2");; *) return 1;; esac; }
 str_contains() { case "$1" in *"$2"*);; *) return 1;; esac; }
-str_after() { R="${1#*"$2"}"; [ "$R" != "$1" ]; }
-str_before() { R="${1%%"$2"*}"; [ "$R" != "$1" ]; }
-str_after_last() { R="${1##*"$2"}"; [ "$R" != "$1" ]; }
-str_before_last() { R="${1%"$2"*}"; [ "$R" != "$1" ]; }
-str_ltrim() { R="${1#"${1%%[![:space:]]*}"}"; }
-str_rtrim() { R="${1%"${1##*[![:space:]]}"}"; }
-str_trim() { R="${1#"${1%%[![:space:]]*}"}"; R="${R%"${R##*[![:space:]]}"}"; }
-str_indent() { R="${1%%[![:space:]]*}"; }
-str_split_indent() { R="${1%%[![:space:]]*}"; R2="${1#"$R"}"; }
+str_after() { R=${1#*"$2"}; [ "$R" != "$1" ]; }
+str_before() { R=${1%%"$2"*}; [ "$R" != "$1" ]; }
+str_after_last() { R=${1##*"$2"}; [ "$R" != "$1" ]; }
+str_before_last() { R=${1%"$2"*}; [ "$R" != "$1" ]; }
+str_ltrim() { R=${1#"${1%%[![:space:]]*}"}; }
+str_rtrim() { R=${1%"${1##*[![:space:]]}"}; }
+str_trim() { R=${1#"${1%%[![:space:]]*}"}; R=${R%"${R##*[![:space:]]}"}; }
+str_indent() { R=${1%%[![:space:]]*}; }
+str_split_indent() { R=${1%%[![:space:]]*}; R2=${1#"$R"}; }
 
 scan() {
   _sc_in=$1
@@ -852,7 +852,7 @@ transform_statement() {
       switch $_ts_call
       case '"'*|"'"*|'$'*|""|*'='*
         R="$_ts_stmt"
-      default: R="${_ts_call}; ${_ts_var}=\"\$R\""
+      default: R="${_ts_call}; ${_ts_var}=\$R"
       end
     end
   default: R="$_ts_stmt"
@@ -860,37 +860,37 @@ transform_statement() {
 }
 
 # Static array/map optimization helpers
-_oac_fail() { R="$_oac_stmt"; return 1; }
+_oac_fail() { R=$_oac_stmt; return 1; }
 _oac_check_name() { case $1 in ""|*[!a-zA-Z0-9_]*) return 1;; esac; }
 _oac_check_int() { case $1 in ""|*[!0-9]*) return 1;; esac; }
 _oac_unquote() {
   switch $1
-  case '"'*'"': R="${1#\"}"; R="${R%\"}"
-  case "'"*"'": R="${1#\'}"; R="${R%\'}"
+  case '"'*'"': R=${1#\"}; R=${R%\"}
+  case "'"*"'": R=${1#\'}; R=${R%\'}
   default: return 1
   end
 }
 _oac_extract_var() {
   switch $1
-  case '"$'*'"': R="${1#\"\$}"; R="${R%\"}"; _oac_check_name "$R"
-  case '$'[a-zA-Z_]*: R="${1#\$}"; _oac_check_name "$R"
+  case '"$'*'"': R=${1#\"\$}; R=${R%\"}; _oac_check_name "$R"
+  case '$'[a-zA-Z_]*: R=${1#\$}; _oac_check_name "$R"
   default: return 1
   end
 }
 _oac_parse_1arg() {
-  str_after "$_oac_stmt" "$1 "; _oac_arg1="$R"
+  str_after "$_oac_stmt" "$1 "; _oac_arg1=$R
 }
 _oac_parse_2args() {
-  str_after "$_oac_stmt" "$1 "; _oac_rest="$R"
-  str_before "$_oac_rest" " "; _oac_arg1="$R"
-  str_after "$_oac_rest" " "; _oac_arg2="$R"
+  str_after "$_oac_stmt" "$1 "; _oac_rest=$R
+  str_before "$_oac_rest" " "; _oac_arg1=$R
+  str_after "$_oac_rest" " "; _oac_arg2=$R
 }
 _oac_parse_3args() {
-  str_after "$_oac_stmt" "$1 "; _oac_rest="$R"
-  str_before "$_oac_rest" " "; _oac_arg1="$R"
-  str_after "$_oac_rest" " "; _oac_rest="$R"
-  str_before "$_oac_rest" " "; _oac_arg2="$R"
-  str_after "$_oac_rest" " "; _oac_arg3="$R"
+  str_after "$_oac_stmt" "$1 "; _oac_rest=$R
+  str_before "$_oac_rest" " "; _oac_arg1=$R
+  str_after "$_oac_rest" " "; _oac_rest=$R
+  str_before "$_oac_rest" " "; _oac_arg2=$R
+  str_after "$_oac_rest" " "; _oac_arg3=$R
 }
 
 # Static array/map optimization - emit direct variable access when names/indices are literals
@@ -903,7 +903,7 @@ optimize_static() {
     _oac_name="$_oac_arg1"; _oac_idx="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     _oac_check_int "$_oac_idx" || _oac_fail || return 1
-    R="R=\"\${__shsh_${_oac_name}_${_oac_idx}}\"; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
+    R="R=\${__shsh_${_oac_name}_${_oac_idx}}; [ \"\${__shsh_${_oac_name}_${_oac_idx}+x}\" ]"
     return 0
 
   case "map_get "*
@@ -912,7 +912,7 @@ optimize_static() {
     _oac_unquote "$_oac_arg2" && _oac_key="$R" || _oac_key="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
     _oac_check_name "$_oac_key" || _oac_fail || return 1
-    R="R=\"\${__shsh_map_${_oac_name}_${_oac_key}}\""
+    R="R=\${__shsh_map_${_oac_name}_${_oac_key}}"
     return 0
 
   case "map_has "*
@@ -928,7 +928,7 @@ optimize_static() {
     _oac_parse_1arg "array_len"
     _oac_name="$_oac_arg1"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
-    R="R=\"\${__shsh_${_oac_name}_n:-0}\""
+    R="R=\${__shsh_${_oac_name}_n:-0}"
     return 0
 
   case "array_set "*
@@ -986,7 +986,7 @@ optimize_static() {
     case '"'|"'": _oac_fail; return 1
     end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}%%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
   case "str_before_last "*
@@ -996,7 +996,7 @@ optimize_static() {
     case '"'|"'": _oac_fail; return 1
     end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%\"${_oac_delim}\"*}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}%\"${_oac_delim}\"*}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
   case "str_after "*
@@ -1006,7 +1006,7 @@ optimize_static() {
     case '"'|"'": _oac_fail; return 1
     end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}#*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
   case "str_after_last "*
@@ -1016,7 +1016,7 @@ optimize_static() {
     case '"'|"'": _oac_fail; return 1
     end
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}##*\"${_oac_delim}\"}\"; [ \"\$R\" != \"\$${_oac_varname}\" ]"
+    R="R=\${${_oac_varname}##*\"${_oac_delim}\"}; [ \"\$R\" != \"\$${_oac_varname}\" ]"
     return 0
 
   case "str_contains "*
@@ -1052,31 +1052,31 @@ optimize_static() {
   case "str_trim "*
     _oac_parse_1arg "str_trim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\"; R=\"\${R%\"\${R##*[![:space:]]}\"}\""
+    R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}; R=\${R%\"\${R##*[![:space:]]}\"}"
     return 0
 
   case "str_ltrim "*
     _oac_parse_1arg "str_ltrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}\""
+    R="R=\${${_oac_varname}#\"\${${_oac_varname}%%[![:space:]]*}\"}"
     return 0
 
   case "str_rtrim "*
     _oac_parse_1arg "str_rtrim"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}\""
+    R="R=\${${_oac_varname}%\"\${${_oac_varname}##*[![:space:]]}\"}"
     return 0
 
   case "str_indent "*
     _oac_parse_1arg "str_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%[![:space:]]*}\""
+    R="R=\${${_oac_varname}%%[![:space:]]*}"
     return 0
 
   case "str_split_indent "*
     _oac_parse_1arg "str_split_indent"
     _oac_extract_var "$_oac_arg1" || _oac_fail || return 1; _oac_varname="$R"
-    R="R=\"\${${_oac_varname}%%[![:space:]]*}\"; R2=\"\${${_oac_varname}#\"\$R\"}\""
+    R="R=\${${_oac_varname}%%[![:space:]]*}; R2=\${${_oac_varname}#\"\$R\"}"
     return 0
 
   case "file_exists "*
