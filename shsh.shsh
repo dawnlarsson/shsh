@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.60.0"
+VERSION="0.61.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1120,7 +1120,7 @@ optimize_static() {
   _oac_stmt="$1"
   # Fast reject - check if first word could possibly match
   switch ${_oac_stmt%% *}
-  case array_*|map_*|str_*|default*
+  case array_*|map_*|str_*|file_*|dir_*|path_*|default*
   default: R="$_oac_stmt"; return 1
   end
   switch $_oac_stmt

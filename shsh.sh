@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.60.0"
+VERSION="0.61.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -553,7 +553,7 @@ bit_128() {
 file_hash() {
   path="$1"
 
-  if ! file_exists "$path"; then
+  if ! [ -f "$path" ]; then
     return 1
   fi
 
@@ -599,7 +599,7 @@ tmp_file() {
     name="shsh_$$_${_shsh_tmp_counter}.tmp"
     path="$base/$name"
 
-    if ! file_exists "$path"; then
+    if ! [ -f "$path" ]; then
       : > "$path" || return 1
       R="$path"
       return 0
@@ -1079,7 +1079,7 @@ _oac_parse_3args() {
 optimize_static() {
   _oac_stmt="$1"
   case ${_oac_stmt%% *} in
-  array_*|map_*|str_*|default*)
+  array_*|map_*|str_*|file_*|dir_*|path_*|default*)
     ;;
   *)R="$_oac_stmt"; return 1;;
   esac
@@ -2003,7 +2003,7 @@ transform() {
   fi
 }
 
-if file_exists "$1"; then
+if [ -f "$1" ]; then
   script="$1"
   _shsh_file="$script"
   shift
@@ -2259,7 +2259,7 @@ case $1 in
     _needs_path=0
     if [ "$_is_update" = 1 ]; then
       for _try_loc in "/usr/local/bin/shsh" "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
-        if file_executable "$_try_loc"; then
+        if [ -x "$_try_loc" ]; then
           _dest="$_try_loc"
           break
         fi
@@ -2269,7 +2269,7 @@ case $1 in
       for _try_dir in "$HOME/.local/bin" "$HOME/bin" "/usr/local/bin"; do
         case ":$PATH:" in
           *":$_try_dir:"*)
-            if path_writable "$_try_dir"; then
+            if [ -w "$_try_dir" ]; then
               _dest="$_try_dir/shsh"
               break
             elif [ "$_try_dir" = "/usr/local/bin" ]; then
@@ -2286,7 +2286,7 @@ case $1 in
       fi
     fi
     _dest_dir=$(dirname "$_dest")
-    if ! dir_exists "$_dest_dir"; then
+    if ! [ -d "$_dest_dir" ]; then
       mkdir -p "$_dest_dir" 2>/dev/null || sudo mkdir -p "$_dest_dir"
     fi
     _src=""
@@ -2344,9 +2344,9 @@ case $1 in
 
       case $SHELL in
         */bash)
-          if file_exists "$HOME/.bash_profile"; then
+          if [ -f "$HOME/.bash_profile" ]; then
             _shell_rc="$HOME/.bash_profile"
-          elif file_exists "$HOME/.bash_login"; then
+          elif [ -f "$HOME/.bash_login" ]; then
             _shell_rc="$HOME/.bash_login"
           else
             _shell_rc="$HOME/.bashrc"
@@ -2361,7 +2361,7 @@ case $1 in
       esac
 
       _already_configured=0
-      if file_exists "$_shell_rc"; then
+      if [ -f "$_shell_rc" ]; then
         if grep -qE '(\.local/bin|HOME/.local/bin)' "$_shell_rc" 2>/dev/null; then
           _already_configured=1
         fi
@@ -2385,9 +2385,9 @@ case $1 in
   uninstall)
     _found=0
     for loc in /usr/local/bin/shsh "$HOME/.local/bin/shsh" "$HOME/bin/shsh"; do
-      if file_exists "$loc"; then
+      if [ -f "$loc" ]; then
         _found=1
-        if path_writable "$(dirname "$loc")"; then
+        if [ -w "$(dirname "$loc")" ]; then
           rm "$loc" && printf "removed: %s\n" "$loc"
         else
           printf "removing %s (requires sudo)...\n" "$loc"
