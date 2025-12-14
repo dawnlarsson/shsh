@@ -1,0 +1,79 @@
+#
+# Example 1: Simple parallel jobs (fire and forget)
+printf "Example 1: Running 3 jobs in parallel...\n"
+
+job: sleep 0.1 && printf "  Job A done\n"
+job: sleep 0.2 && printf "  Job B done\n"  
+job: sleep 0.15 && printf "  Job C done\n"
+
+job_wait
+printf "All jobs complete!\n\n"
+
+#
+# Example 2: Named jobs with selective waiting
+printf "Example 2: Named jobs...\n"
+
+job fast: sleep 0.1 && printf "  Fast finished\n"
+job slow: sleep 0.3 && printf "  Slow finished\n"
+
+job_wait fast
+printf "  Fast job done (slow still running)\n"
+
+job_wait slow
+printf "  Now slow is done too\n\n"
+
+#
+# Example 3: Check job status while running
+printf "Example 3: Checking job status...\n"
+
+job worker: sleep 0.15
+
+if job_status worker
+  printf "  Worker is running...\n"
+end
+
+job_wait worker
+printf "  Worker finished\n\n"
+
+#
+# Example 4: Capture output (prevents interleaving)
+printf "Example 4: Capturing output from parallel jobs...\n"
+
+job_capture task1: sleep 0.05 && printf "Output from task 1"
+job_capture task2: sleep 0.02 && printf "Output from task 2"
+
+# Output appears atomically after each job completes
+job_wait
+printf "\n  (Output was captured, no interleaving)\n\n"
+
+#
+# Example 5: Dynamic job management
+printf "Example 5: Dynamic job management...\n"
+
+job sleep 0.1
+job sleep 0.15
+job sleep 0.2
+
+job_count
+printf "  Started %s jobs\n" "$R"
+
+while job_running
+  job_count
+  printf "  Running: %s\n" "$R"
+  sleep 0.05
+done
+
+printf "  All jobs finished!\n\n"
+
+#
+# Example 6: Throttled parallelism (max 2 concurrent)
+printf "Example 6: Limited concurrency (max 2 at a time)...\n"
+
+for i in 1 2 3 4 5
+  job_limit 2 sleep 0.1
+  job_count
+  printf "  Spawned job %s (running: %s)\n" "$i" "$R"
+done
+
+job_wait
+printf "  All throttled jobs done!\n"

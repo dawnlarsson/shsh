@@ -2,7 +2,7 @@
 
 Self-hosting shell transpiler with a beautifully simple high level syntax for POSIX shells.
 
-Passing 723 tests.
+Passing 737 tests.
 
 Write expressive shell scripts that compile to portable POSIX sh.
 
@@ -27,6 +27,7 @@ fi
 - **Arithmetic** — `i++`, `i--`, `i += 5`, `i -= 3`, `i *= 2`, `i /= 4`, `i %= 3`
 - **Assignment Capture** — `result = str_before "$s" ":"` captures function results
 - **Single-line Forms** — `if $x > 0: echo "yes"`, `while $i < 10: i++`
+- **Jobs** — Easy concurrency with `job:`, `job_wait`, `job_limit`
 - **Modules** — `use lib/utils.shsh` with scoped calls `utils.function`
 - **Try/Catch** — Error handling with automatic propagation
 - **Arrays** — Dynamic arrays with iteration support
@@ -307,6 +308,113 @@ try
 catch
   echo "Outer failed: $error"
 end
+```
+
+---
+
+## Jobs
+
+Run commands in parallel with minimal syntax:
+
+### Basic Parallel Execution
+```sh
+# Fire off parallel jobs
+job: sleep 1 && echo "Task A done"
+job: sleep 2 && echo "Task B done"
+job: fetch_data "$url"
+
+# Wait for all to complete
+job_wait
+echo "All jobs finished"
+```
+
+### Named Jobs
+
+Name jobs for selective waiting:
+```sh
+job download: curl -O "$url"
+job process: heavy_computation
+
+# Wait for specific job
+job_wait download
+echo "Download complete, processing still running..."
+
+job_wait process
+echo "All done"
+```
+
+### Check Job Status
+```sh
+job worker: long_running_task
+
+while job_status worker
+  echo "Still working..."
+  sleep 1
+done
+echo "Worker finished"
+```
+
+### Captured Output
+
+Prevent output interleaving from parallel jobs:
+```sh
+job_capture: curl -s "$url1"
+job_capture: curl -s "$url2"
+job_capture: curl -s "$url3"
+
+# Output appears atomically after each job completes
+job_wait
+```
+
+### Throttled Parallelism
+
+Limit concurrent jobs (e.g., max 4 at a time):
+```sh
+for url in $urls
+  job_limit 4 curl -O "$url"
+done
+job_wait
+```
+
+### Job Functions
+
+| Function | Description |
+|----------|-------------|
+| `job cmd...` | Run command in background |
+| `job name cmd...` | Run named background job |
+| `job_capture cmd...` | Run job, capture stdout/stderr |
+| `job_wait` | Wait for all jobs |
+| `job_wait name` | Wait for specific named job |
+| `job_status name` | Check if named job is running (returns 0 if running) |
+| `job_running` | Check if any job is running |
+| `job_count` | Set `$R` to number of running jobs |
+| `job_limit N cmd...` | Run job only when fewer than N jobs are running |
+
+### Syntax Sugar
+
+The `job:` and `job_capture:` syntax handles complex commands:
+```sh
+# These are equivalent:
+job: cmd1 && cmd2 || cmd3
+job sh -c 'cmd1 && cmd2 || cmd3'
+
+# Named job with colon syntax:
+job mytask: pipeline | commands
+```
+
+**Note:** When using `job:` with `&&`, `||`, or `;`, the command is wrapped in `sh -c '...'`. 
+Variables in the command won't expand inside the single quotes. Use the function form for 
+commands with variables:
+```sh
+# This works - variable expands before job runs:
+job curl -O "$url"
+
+# This won't work as expected with &&:
+job: curl -O "$url" && echo done    # $url is in single quotes!
+
+# Instead, use a function:
+download() { curl -O "$1" && echo done; }
+job download "$url"
 ```
 
 ---

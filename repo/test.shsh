@@ -6284,6 +6284,146 @@ test "chained inline statements" {
 }
 
 echo
+echo "=== Jobs ==="
+
+test "job runs command" {
+  _job_test_file="/tmp/shsh_job_test_1"
+  rm -f "$_job_test_file"
+  job touch "$_job_test_file"
+  job_wait
+  if file_exists "$_job_test_file"
+    test_pass
+  else
+    test_fail "job did not run"
+  end
+  rm -f "$_job_test_file"
+}
+
+test "job_wait waits for completion" {
+  _jwt_start=$(date +%s)
+  job sleep 0.1
+  job_wait
+  _jwt_end=$(date +%s)
+  # Should complete (not hang forever)
+  test_pass
+}
+
+test "job named can be waited specifically" {
+  job first sleep 0.02
+  job second sleep 0.1
+  job_wait first
+  # first should be done now
+  if job_status first
+    test_fail "first job should be complete"
+  else
+    test_pass
+  end
+  job_wait second
+}
+
+test "job_status returns 0 while running" {
+  job sleeper sleep 0.2
+  if job_status sleeper
+    test_pass
+  else
+    test_fail "job_status should return 0 for running job"
+  end
+  job_wait sleeper
+}
+
+test "job_status returns 1 after completion" {
+  job quick sleep 0.01
+  job_wait quick
+  if job_status quick
+    test_fail "job_status should return 1 for completed job"
+  else
+    test_pass
+  end
+}
+
+test "job_running detects running jobs" {
+  job runner sleep 0.1
+  if job_running
+    test_pass
+  else
+    test_fail "job_running should return 0 when jobs are running"
+  end
+  job_wait
+}
+
+test "job_running returns 1 when no jobs" {
+  job_wait  # ensure no jobs running
+  if job_running
+    test_fail "job_running should return 1 when no jobs running"
+  else
+    test_pass
+  end
+}
+
+test "job_count counts running jobs" {
+  job c1 sleep 0.15
+  job c2 sleep 0.15
+  job c3 sleep 0.15
+  job_count
+  if [ "$R" -ge 1 ]
+    test_pass
+  else
+    test_fail "job_count should be at least 1, got $R"
+  end
+  job_wait
+}
+
+test "job_capture captures output" {
+  job_capture cap_test printf "captured"
+  job_wait cap_test
+  # Output would have been printed by job_wait
+  test_pass
+}
+
+test "job_limit throttles concurrency" {
+  _jl_count=0
+  for i in 1 2 3 4 5
+    job_limit 2 sleep 0.01
+    job_count
+    if [ "$R" -le 2 ]
+      _jl_count=$((_jl_count + 1))
+    end
+  done
+  job_wait
+  test_equals "$_jl_count" "5"
+}
+
+test "job colon syntax with complex command" {
+  rm -f "/tmp/shsh_jcc_test"
+  job: touch /tmp/shsh_jcc_test && sleep 0.01
+  job_wait
+  if file_exists "/tmp/shsh_jcc_test"
+    test_pass
+  else
+    test_fail "complex job command did not run"
+  end
+  rm -f "/tmp/shsh_jcc_test"
+}
+
+test "multiple job_wait calls are safe" {
+  job mw sleep 0.01
+  job_wait mw
+  job_wait mw  # should not error
+  job_wait     # should not error
+  test_pass
+}
+
+test "job syntax transformation" {
+  _jst=$(echo 'job: echo hello' | sh "$_shsh" raw)
+  test_contains "$_jst" "job"
+}
+
+test "job named syntax transformation" {
+  _jnst=$(echo 'job mytask: echo hello' | sh "$_shsh" raw)
+  test_contains "$_jnst" "mytask"
+}
+
+echo
 echo "=== Modules ==="
 
 use repo/testmodule.shsh

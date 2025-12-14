@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.65.0"
+VERSION="0.66.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -760,6 +760,151 @@ test_dir_exists() {
   else
     test_fail "directory '$1' does not exist"
   fi
+}
+
+_shsh_jobs=""
+_shsh_job_n=0
+
+_job_is_name() {
+  _shsh_check_name "$1" || return 1
+  case "$2" in
+    -*|[0-9]*|"$"*|/*) return 1 ;;
+  esac
+  case "$1" in
+    sh|bash|dash|zsh|ksh|awk|sed|grep|find|cat|echo|printf|ls|cp|mv|rm|mkdir|touch|chmod|chown|head|tail|sort|uniq|wc|tr|cut|date|sleep|kill|test|true|false|cd|pwd|env|export|read|eval|exec|exit|wait|trap|set|unset|curl|wget|tar|gzip|zip|unzip|make|git|ssh|scp|rsync|docker|npm|node|python|ruby|perl|php) return 1 ;;
+  esac
+  return 0
+}
+
+job() {
+  _shsh_job_n=$((_shsh_job_n + 1))
+  _job_id="_$_shsh_job_n"
+  
+  case "$1" in
+    -*|*/*|*=*) ;;
+    *)
+      if [ $# -gt 1 ] && _job_is_name "$1" "$2"; then
+        _job_id="$1"; shift
+      fi
+      ;;
+  esac
+  
+  "$@" &
+  _job_pid=$!
+  
+  eval "__shsh_job_${_job_id}_pid=$_job_pid"
+  _shsh_jobs="$_shsh_jobs $_job_id"
+}
+
+job_capture() {
+  _shsh_job_n=$((_shsh_job_n + 1))
+  _job_id="_$_shsh_job_n"
+  
+  case "$1" in
+    -*|*/*|*=*) ;;
+    *)
+      if [ $# -gt 1 ] && _job_is_name "$1" "$2"; then
+        _job_id="$1"; shift
+      fi
+      ;;
+  esac
+  
+  tmp_file; _job_log="$R"
+  
+  ( "$@" > "$_job_log" 2>&1 ) &
+  _job_pid=$!
+  
+  eval "__shsh_job_${_job_id}_pid=$_job_pid"
+  eval "__shsh_job_${_job_id}_log=\"$_job_log\""
+  _shsh_jobs="$_shsh_jobs $_job_id"
+}
+
+job_wait() {
+  if [ -n "$1" ]; then
+    # Wait for specific job
+    _shsh_check_name "$1" || return 1
+    eval "_jw_pid=\"\${__shsh_job_${1}_pid}\""
+    eval "_jw_log=\"\${__shsh_job_${1}_log}\""
+    [ -z "$_jw_pid" ] && return 1
+    
+    wait "$_jw_pid" 2>/dev/null
+    R=$?
+    
+    if [ -n "$_jw_log" ] && [ -f "$_jw_log" ]; then
+      cat "$_jw_log"
+      rm -f "$_jw_log"
+    fi
+    
+    unset "__shsh_job_${1}_pid" "__shsh_job_${1}_log"
+    _shsh_jobs="${_shsh_jobs% $1}${_shsh_jobs#* $1}"
+  else
+    # Wait for all jobs
+    R=0
+    for _jw_id in $_shsh_jobs; do
+      eval "_jw_pid=\"\${__shsh_job_${_jw_id}_pid}\""
+      eval "_jw_log=\"\${__shsh_job_${_jw_id}_log}\""
+      [ -z "$_jw_pid" ] && continue
+      
+      wait "$_jw_pid" 2>/dev/null
+      _jw_code=$?
+      [ "$_jw_code" -ne 0 ] && R=$_jw_code
+      
+      if [ -n "$_jw_log" ] && [ -f "$_jw_log" ]; then
+        cat "$_jw_log"
+        rm -f "$_jw_log"
+      fi
+      
+      unset "__shsh_job_${_jw_id}_pid" "__shsh_job_${_jw_id}_log"
+    done
+    _shsh_jobs=""
+  fi
+}
+
+job_status() {
+  _shsh_check_name "$1" || return 1
+  eval "_js_pid=\"\${__shsh_job_${1}_pid}\""
+  [ -z "$_js_pid" ] && return 1
+  kill -0 "$_js_pid" 2>/dev/null
+}
+
+job_running() {
+  for _jr_id in $_shsh_jobs; do
+    eval "_jr_pid=\"\${__shsh_job_${_jr_id}_pid}\""
+    [ -n "$_jr_pid" ] && kill -0 "$_jr_pid" 2>/dev/null && return 0
+  done
+  return 1
+}
+
+job_count() {
+  R=0
+  for _jc_id in $_shsh_jobs; do
+    eval "_jc_pid=\"\${__shsh_job_${_jc_id}_pid}\""
+    [ -n "$_jc_pid" ] && kill -0 "$_jc_pid" 2>/dev/null && R=$((R + 1))
+  done
+}
+
+job_each() {
+  _je_arr="$1"; _je_fn="$2"
+  _shsh_check_name "$_je_arr" || return 1
+  eval "_je_len=\${__shsh_${_je_arr}_n:-0}"
+  _je_i=0
+  while [ "$_je_i" -lt "$_je_len" ]; do
+    eval "_je_val=\"\${__shsh_${_je_arr}_$_je_i}\""
+    job "$_je_fn" "$_je_val"
+    _je_i=$((_je_i + 1))
+  done
+}
+
+job_limit() {
+  _jl_max="$1"
+  shift
+  
+  while :; do
+    job_count
+    [ "$R" -lt "$_jl_max" ] && break
+    sleep 0.01
+  done
+  job "$@"
 }
 # __RUNTIME_END__
 
@@ -1936,6 +2081,47 @@ transform_line() {
       end
     end
   
+  case "job: "*
+    str_after "$stripped" "job: "
+    # Wrap complex commands in a subshell for proper backgrounding
+    switch $R
+    case *"&&"*|*"||"*|*";"*|*"|"*
+      printf '%s\n' "${indent}job sh -c '$R'"
+    default
+      printf '%s\n' "${indent}job $R"
+    end
+  
+  case "job "*": "*
+    str_after "$stripped" "job "; _job_rest="$R"
+    str_before "$_job_rest" ": "; _job_name="$R"
+    str_after "$_job_rest" ": "; _job_cmd="$R"
+    switch $_job_cmd
+    case *"&&"*|*"||"*|*";"*|*"|"*
+      printf '%s\n' "${indent}job $_job_name sh -c '$_job_cmd'"
+    default
+      printf '%s\n' "${indent}job $_job_name $_job_cmd"
+    end
+  
+  case "job_capture: "*
+    str_after "$stripped" "job_capture: "
+    switch $R
+    case *"&&"*|*"||"*|*";"*|*"|"*
+      printf '%s\n' "${indent}job_capture sh -c '$R'"
+    default
+      printf '%s\n' "${indent}job_capture $R"
+    end
+  
+  case "job_capture "*": "*
+    str_after "$stripped" "job_capture "; _job_rest="$R"
+    str_before "$_job_rest" ": "; _job_name="$R"
+    str_after "$_job_rest" ": "; _job_cmd="$R"
+    switch $_job_cmd
+    case *"&&"*|*"||"*|*";"*|*"|"*
+      printf '%s\n' "${indent}job_capture $_job_name sh -c '$_job_cmd'"
+    default
+      printf '%s\n' "${indent}job_capture $_job_name $_job_cmd"
+    end
+
   case "try"
     try_depth_inc
     printf "${indent}_shsh_err_$try_depth=0; _shsh_brk_$try_depth=0; while [ \"\$_shsh_brk_$try_depth\" -eq 0 ]; do\n"
