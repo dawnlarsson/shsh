@@ -1354,6 +1354,17 @@ test "bit_8 mixed string/hex" {
   test_equals "$got" "414243"
 }
 
+test "bit_8 octal interpretation error" {
+  err_out=$(sh -c './shsh.sh -e "bit_8 08"' 2>&1)
+  status=$?
+  
+  if $status != 0
+    test_fail "bit_8 crashed on input '08' (Octal interpretation error)"
+  else
+    test_pass
+  end
+}
+
 test "bit_16 LE" {
   got=$(hex_capture 'bit_16 0x1234')
   test_equals "$got" "3412"

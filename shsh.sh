@@ -6,7 +6,7 @@ if [ -z "$_SHSH_DASH" ]; then
   fi
 fi
 
-VERSION="0.64.0"
+VERSION="0.65.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -449,6 +449,7 @@ bit_8() {
         ;;
       *)
         if _is_int "$_b8_arg"; then
+          case "$_b8_arg" in 0[0-9]*) _b8_arg="${_b8_arg#"${_b8_arg%%[!0]*}"}"; [ -z "$_b8_arg" ] && _b8_arg=0;; esac
           _b8_v=$((${_b8_arg}))
           printf "%b" "\\$(( (_b8_v >> 6) & 7 ))$(( (_b8_v >> 3) & 7 ))$(( _b8_v & 7 ))"
         else
@@ -1176,6 +1177,10 @@ optimize_static() {
     _oac_parse_2args "array_add"
     _oac_name="$_oac_arg1"; _oac_val="$_oac_arg2"
     _oac_check_name "$_oac_name" || _oac_fail || return 1
+    case $_oac_val in
+    *';'*|*'$'*|*'`'*)_oac_fail; return 1;;
+    "'"[!\']*|'"'[!\"]*)_oac_fail; return 1;;
+    esac
     if _oac_unquote "$_oac_val"; then
       case $R in
       *'"'*|*"'"*|*'\\'*)_oac_fail; return 1;;
