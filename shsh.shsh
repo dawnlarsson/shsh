@@ -12,7 +12,7 @@ if "$_SHSH_DASH" == ""
   end
 end
 
-VERSION="0.63.0"
+VERSION="0.64.0"
 
 # __RUNTIME_START__
 _shsh_sq="'"
@@ -1718,7 +1718,8 @@ _handle_conditional() {
   else
     switch $_hc_rest
     case *"; $_hc_suffix"*
-      printf '%s\n' "${_hc_indent}${_hc_kw} ${_hc_rest}"
+      printf '%s\n' "${_emit_prefix}${_hc_indent}${_hc_kw} ${_hc_rest}"
+      _emit_prefix=""
       _hc_complete=0
       if "$_hc_kw" == "while" || "$_hc_kw" == "for"
         switch $_hc_rest
@@ -1736,9 +1737,11 @@ _handle_conditional() {
         if "$_hc_kw" == "while": push w
       end
     default
+      _hc_is_piped=0
+      if "$_emit_prefix" != "" && "$_hc_kw" == "while": _hc_is_piped=1
       emit_condition "$_hc_kw" "$_hc_rest" "$_hc_indent" "; $_hc_suffix"
       if "$_hc_push" != "": push "$_hc_push"
-      if "$_hc_kw" == "while": push w
+      if "$_hc_kw" == "while" && $_hc_is_piped == 0: push w
     end
   end
 }

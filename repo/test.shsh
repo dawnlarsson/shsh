@@ -2911,6 +2911,24 @@ test "pipe before while should transform" {
   end
 }
 
+test "pipe preserved with shell-syntax while" {
+  _raw_out=$(printf 'df -h | while read -r l; do echo "$l"; done' | "$_shsh" raw -)
+  if str_starts "$_raw_out" "df -h | while"
+    test_pass
+  else
+    test_fail "pipe dropped from shell-syntax while: $_raw_out"
+  end
+}
+
+test "pipe preserved with shell-syntax for" {
+  _raw_out=$(printf 'ls | for f in a b c; do echo $f; done' | "$_shsh" raw -)
+  if str_starts "$_raw_out" "ls | for"
+    test_pass
+  else
+    test_fail "pipe dropped from shell-syntax for: $_raw_out"
+  end
+}
+
 test "&& before if should transform" {
   # 'true && if $x == 1:' should transform the if
   _raw_out=$(printf 'true && if $x == 1: echo yes; end' | "$_shsh" raw -)
@@ -6333,20 +6351,6 @@ test "error shows error line" {
 end' | sh "$_shsh" raw 2>&1 >/dev/null)"
   test_contains "$_err" "end"
 }
-
-
-# Nested inline control structures are not yet supported
-# test "inline for with break simulation" {
-#   _ilfb=""
-#   for i in 1 2 3 4 5: if $i == 3: _ilfb="$_ilfb!"; end; _ilfb="$_ilfb$i"; end
-#   test_equals "$_ilfb" "12!345"
-# }
-
-# test "inline if inside inline for" {
-#   _iiif=""
-#   for n in 1 2 3 4: if $n > 2: _iiif="$_iiif$n"; end; end
-#   test_equals "$_iiif" "34"
-# }
 
 echo
 echo "========================================"
