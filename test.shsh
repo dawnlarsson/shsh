@@ -1,0 +1,23 @@
+# test
+
+hello
+	echo "Hello"
+
+if true
+	echo "yes"
+	if nested
+		echo "deep"
+	else
+		echo "other"
+
+echo "done"
+
+some_function
+	if true
+		echo "yes"
+		if nested
+			echo "deep"
+		else
+			echo "other"
+	
+	echo "done"
